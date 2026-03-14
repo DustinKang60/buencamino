@@ -1304,42 +1304,96 @@ function calcSettle(){
   const to=document.getElementById('st-to')?.value||'';
   const members=['나',...(p.members||[])];
   const n=members.length||1;
+  const dns=['일','월','화','수','목','금','토'];
+
+  // 기간 내 날짜별 지출 수집
+  const dayEntries=Object.entries(p.days||{})
+    .filter(([d])=>d>=from&&d<=to)
+    .sort(([a],[b])=>a.localeCompare(b));
+
   let all=[];
-  Object.entries(p.days||{}).forEach(([date,day])=>{
-    if(date>=from&&date<=to)(day.expenses||[]).forEach(e=>all.push({...e,date}));
-  });
+  dayEntries.forEach(([date,day])=>(day.expenses||[]).forEach(e=>all.push({...e,date})));
+
   const grand=all.reduce((s,e)=>s+(e.amtKRW||0),0);
   const sharedTotal=all.filter(e=>e.shared).reduce((s,e)=>s+(e.amtKRW||0),0);
   const personalTotal=grand-sharedTotal;
   const perPerson=n>1?Math.round(sharedTotal/n):0;
 
-  const dayRows=Object.entries(p.days||{})
-    .filter(([d])=>d>=from&&d<=to&&(p.days[d].expenses||[]).length)
-    .sort(([a],[b])=>a.localeCompare(b))
-    .map(([date,day])=>{
-      const dt=new Date(date+'T00:00:00');
-      const tot=(day.expenses||[]).reduce((s,e)=>s+(e.amtKRW||0),0);
-      return`<div class="row"><span class="rl">${dt.getMonth()+1}/${dt.getDate()}</span><span class="rr">${fmtW(tot)}</span></div>`;
+  // 날짜별 상세 내역 HTML
+  const detailHTML=dayEntries.map(([date,day])=>{
+    const exps=day.expenses||[];
+    if(!exps.length)return'';
+    const dt=new Date(date+'T00:00:00');
+    const dl=`${dt.getMonth()+1}월 ${dt.getDate()}일 (${dns[dt.getDay()]})`;
+    const dayTotal=exps.reduce((s,e)=>s+(e.amtKRW||0),0);
+    const rows=exps.map(e=>{
+      const cats=(e.catIds||[e.catId]).map(id=>{
+        const cat=db.cats.find(c=>c.id===id);return cat?cat.icon+' '+cat.name:'';
+      }).filter(Boolean).join(' + ');
+      const localStr=e.amtLocal&&e.currency&&e.currency!=='KRW'
+        ?`<span style="color:var(--text3);font-size:11px;">${fmtLocal2(e.amtLocal,e.currency)}</span> `:'';
+      const payIcon=e.payType==='cash'?'💵':'💳';
+      const shBadge=e.shared
+        ?`<span style="background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:1px 6px;font-size:10px;font-weight:700;">공통</span>`
+        :`<span style="background:var(--accent-bg);color:var(--accent2);border-radius:8px;padding:1px 6px;font-size:10px;font-weight:700;">개인</span>`;
+      const memo=e.memo?`<span style="color:var(--text3);font-size:11px;"> · ${esc(e.memo)}</span>`:'';
+      return`<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--border);">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;color:var(--text);">${cats}${memo}</div>
+          <div style="margin-top:3px;display:flex;gap:5px;align-items:center;">${shBadge} <span style="font-size:11px;color:var(--text3);">${payIcon}</span></div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-left:10px;">
+          ${localStr}
+          <div style="font-size:13px;font-weight:700;color:var(--text);">${fmtW(e.amtKRW||0)}</div>
+        </div>
+      </div>`;
     }).join('');
+    return`<div class="settle-day-card">
+      <div class="settle-day-hdr">
+        <span style="font-size:13px;font-weight:700;color:var(--text);">${dl}</span>
+        <span style="font-size:13px;font-weight:700;color:var(--accent2);">${fmtW(dayTotal)}</span>
+      </div>
+      <div style="padding:0 12px;">${rows}</div>
+    </div>`;
+  }).join('');
 
   document.getElementById('settle-body-res').innerHTML=`
-  <div class="card" style="margin-bottom:8px;">
-    <div class="row"><span class="rl">기간 총 지출</span><span style="font-size:15px;font-weight:700;color:var(--text);">${fmtW(grand)}</span></div>
-    <div class="row"><span class="rl">개인 지출</span><span class="rr" style="color:var(--accent2);">${fmtW(personalTotal)}</span></div>
-    <div class="row"><span class="rl">공통 지출</span><span class="rr" style="color:var(--amber);">${fmtW(sharedTotal)}</span></div>
+  <!-- 요약 -->
+  <div class="card" style="margin-bottom:10px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <span style="font-size:12px;color:var(--text3);">기간 총 지출</span>
+      <span style="font-size:20px;font-weight:700;color:var(--text);">${fmtW(grand)}</span>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <div style="flex:1;background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:10px;padding:8px 10px;text-align:center;">
+        <div style="font-size:10px;color:var(--accent2);margin-bottom:3px;">개인</div>
+        <div style="font-size:14px;font-weight:700;color:var(--accent2);">${fmtW(personalTotal)}</div>
+      </div>
+      <div style="flex:1;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:10px;padding:8px 10px;text-align:center;">
+        <div style="font-size:10px;color:var(--amber);margin-bottom:3px;">공통</div>
+        <div style="font-size:14px;font-weight:700;color:var(--amber);">${fmtW(sharedTotal)}</div>
+      </div>
+      ${n>1?`<div style="flex:1;background:var(--green-bg);border:1px solid var(--green-border);border-radius:10px;padding:8px 10px;text-align:center;">
+        <div style="font-size:10px;color:var(--green);margin-bottom:3px;">1인당</div>
+        <div style="font-size:14px;font-weight:700;color:var(--green);">${fmtW(perPerson)}</div>
+      </div>`:''}
+    </div>
   </div>
-  ${n>1?`<div style="background:var(--green-bg);border:1px solid var(--green-border);border-radius:var(--radius);padding:14px;margin-bottom:8px;">
-    <div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:6px;">1인당 공통 부담</div>
-    <div style="font-size:26px;font-weight:700;color:var(--green);margin-bottom:3px;">${fmtW(perPerson)}</div>
-    <div style="font-size:11px;color:var(--text3);">${fmtW(sharedTotal)} ÷ ${n}명</div>
-  </div>
-  <div class="card" style="margin-bottom:8px;">
+
+  <!-- 동반자 정산 -->
+  ${n>1?`<div class="card" style="margin-bottom:10px;">
     <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:8px;">동반자별 받을 금액</div>
-    ${(p.members||[]).map(m=>`<div class="row"><span style="font-size:13px;color:var(--text);">👤 ${m}</span>
-      <span style="font-size:13px;font-weight:700;color:var(--green);">${fmtW(perPerson)} 받기</span></div>`).join('')}
+    ${(p.members||[]).map(m=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid var(--border);">
+      <span style="font-size:13px;color:var(--text);">👤 ${m}</span>
+      <span style="font-size:13px;font-weight:700;color:var(--green);">${fmtW(perPerson)} 받기</span>
+    </div>`).join('')}
   </div>`:''}
-  ${dayRows?`<div class="card"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:6px;">일별 내역</div>${dayRows}</div>`:''}`;
+
+  <!-- 날짜별 상세 내역 -->
+  <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;font-weight:700;padding:8px 0 10px;">상세 지출 내역</div>
+  ${detailHTML||`<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">이 기간에 지출 내역이 없습니다</div>`}`;
 }
+
 
 // ══════════════════════════════════
 // SETTLE SCREEN
@@ -1411,75 +1465,127 @@ function _buildPDF(){
   const p=_getSettleProj(); if(!p)return;
   const from=document.getElementById('st-from')?.value||'';
   const to=document.getElementById('st-to')?.value||'';
+  if(!window.jspdf){alert('PDF 라이브러리 로딩 중입니다. 잠시 후 다시 눌러주세요.');return;}
   const {jsPDF}=window.jspdf;
   const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  const W=210,margin=15;let y=20;
+  const W=210, M=15, RW=W-M*2; let y=18;
 
-  // Title
-  doc.setFontSize(18);doc.setFont('helvetica','bold');
-  doc.text('Buen Camino - Travel Report',margin,y);y+=8;
-  doc.setFontSize(11);doc.setFont('helvetica','normal');
-  doc.text(`${p.name}  ${from} ~ ${to}`,margin,y);y+=6;
-  doc.text(`Currency: ${p.currency}  Members: ${['나',...(p.members||[])].join(', ')}`,margin,y);y+=8;
-  doc.setDrawColor(180);doc.line(margin,y,W-margin,y);y+=6;
+  const addPage=()=>{doc.addPage();y=18;};
+  const chk=(h)=>{if(y+h>280)addPage();};
 
-  // Collect expenses
-  let all=[];
+  // ── 헤더 ──
+  doc.setFillColor(8,12,24);
+  doc.rect(0,0,W,28,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(16);doc.setFont('helvetica','bold');
+  doc.text('Buen Camino  Travel Report',M,12);
+  doc.setFontSize(9);doc.setFont('helvetica','normal');
+  doc.text(`${p.flag||''} ${p.name}   ${from} ~ ${to}   ${p.currency}`,M,20);
+  const mems=['나',...(p.members||[])];
+  doc.text(`Members: ${mems.join(', ')}`,M,25);
+  y=36;
+
+  // ── 요약 ──
+  const all=[];
   Object.entries(p.days||{}).forEach(([date,day])=>{
     if(date>=from&&date<=to)(day.expenses||[]).forEach(e=>all.push({...e,date}));
   });
   const grand=all.reduce((s,e)=>s+(e.amtKRW||0),0);
   const sharedTotal=all.filter(e=>e.shared).reduce((s,e)=>s+(e.amtKRW||0),0);
-  const members=['나',...(p.members||[])];
-  const perPerson=members.length>1?Math.round(sharedTotal/members.length):0;
+  const personalTotal=grand-sharedTotal;
+  const perPerson=mems.length>1?Math.round(sharedTotal/mems.length):0;
 
-  // Day-by-day
-  const byDate={};
-  all.forEach(e=>{if(!byDate[e.date])byDate[e.date]=[];byDate[e.date].push(e);});
-  const dns=['일','월','화','수','목','금','토'];
-
-  Object.keys(byDate).sort().forEach(date=>{
-    if(y>265){doc.addPage();y=20;}
-    const dt=new Date(date+'T00:00:00');
-    const dl=`${dt.getMonth()+1}/${dt.getDate()}(${dns[dt.getDay()]})`;
-    const dayTotal=byDate[date].reduce((s,e)=>s+(e.amtKRW||0),0);
-    doc.setFontSize(10);doc.setFont('helvetica','bold');
-    doc.text(dl,margin,y);
-    doc.text('KRW '+dayTotal.toLocaleString(),W-margin,y,{align:'right'});
-    y+=5;
-    byDate[date].forEach(e=>{
-      if(y>270){doc.addPage();y=20;}
-      const cats=(e.catIds||[e.catId]).map(id=>{const cat=db.cats.find(c=>c.id===id);return cat?cat.name:'';}).filter(Boolean).join('+');
-      const amtStr=e.amtLocal&&e.currency!=='KRW'?`${e.currency} ${Math.round(e.amtLocal).toLocaleString()} (KRW ${(e.amtKRW||0).toLocaleString()})`:
-        'KRW '+(e.amtKRW||0).toLocaleString();
-      doc.setFontSize(9);doc.setFont('helvetica','normal');
-      const payLabel=e.payType==='cash'?'현금':'카드';
-      const shLabel=e.shared?'공통':'개인';
-      doc.text(`  ${cats}  [${shLabel}/${payLabel}]${e.memo?' · '+e.memo:''}`,margin+2,y);
-      doc.text(amtStr,W-margin,y,{align:'right'});
-      y+=4.5;
-    });
-    doc.setDrawColor(220);doc.line(margin,y,W-margin,y);y+=3;
-  });
-
-  // Summary
-  if(y>240){doc.addPage();y=20;}
-  y+=4;
+  doc.setTextColor(30,30,30);
   doc.setFontSize(11);doc.setFont('helvetica','bold');
-  doc.text('Summary',margin,y);y+=6;
-  doc.setFontSize(10);doc.setFont('helvetica','normal');
-  doc.text(`Total: KRW ${grand.toLocaleString()}`,margin,y);y+=5;
-  doc.text(`Shared: KRW ${sharedTotal.toLocaleString()}`,margin,y);y+=5;
-  if(members.length>1){
-    doc.text(`Per person: KRW ${perPerson.toLocaleString()} (${members.length} people)`,margin,y);y+=5;
-    members.forEach(m=>{
-      doc.text(`  ${m}: KRW ${perPerson.toLocaleString()}`,margin,y);y+=4.5;
+  doc.text('Summary',M,y);y+=5;
+  doc.setDrawColor(200);doc.line(M,y,W-M,y);y+=4;
+  doc.setFontSize(9);doc.setFont('helvetica','normal');
+  const sumRows=[
+    ['Total',fmtW(grand)],
+    ['Personal',fmtW(personalTotal)],
+    ['Shared (common)',fmtW(sharedTotal)],
+    ...(mems.length>1?[['Per person (shared)',fmtW(perPerson)]]:[]),
+  ];
+  sumRows.forEach(([l,v])=>{
+    doc.setFont('helvetica','normal');doc.text(l,M+2,y);
+    doc.setFont('helvetica','bold');doc.text(v,W-M,y,{align:'right'});
+    y+=5;
+  });
+  if(mems.length>1){
+    y+=2;
+    doc.setFont('helvetica','bold');doc.text('Settlement',M+2,y);y+=4;
+    doc.setFont('helvetica','normal');
+    mems.slice(1).forEach(m=>{
+      doc.text(`  ${m} → receives ${fmtW(perPerson)}`,M+2,y);y+=4.5;
     });
   }
+  y+=4;
 
-  const fname=`BuenCamino_${p.name}_${from}_${to}.pdf`.replace(/\s/g,'_');
+  // ── 날짜별 상세 ──
+  const dns=['일','월','화','수','목','금','토'];
+  const dayEntries=Object.entries(p.days||{})
+    .filter(([d])=>d>=from&&d<=to&&(p.days[d].expenses||[]).length)
+    .sort(([a],[b])=>a.localeCompare(b));
+
+  doc.setFontSize(11);doc.setFont('helvetica','bold');
+  chk(8);doc.text('Expense Detail',M,y);y+=5;
+  doc.setDrawColor(200);doc.line(M,y,W-M,y);y+=4;
+
+  dayEntries.forEach(([date,day])=>{
+    const dt=new Date(date+'T00:00:00');
+    const dl=`${dt.getMonth()+1}/${dt.getDate()}(${dns[dt.getDay()]})`;
+    const dayTotal=(day.expenses||[]).reduce((s,e)=>s+(e.amtKRW||0),0);
+
+    chk(10);
+    // 날짜 헤더 배경
+    doc.setFillColor(240,243,250);
+    doc.rect(M,y-3.5,RW,6,'F');
+    doc.setFontSize(9);doc.setFont('helvetica','bold');doc.setTextColor(20,31,53);
+    doc.text(dl,M+2,y);
+    doc.text('KRW '+dayTotal.toLocaleString(),W-M,y,{align:'right'});
+    doc.setTextColor(30,30,30);
+    y+=6;
+
+    (day.expenses||[]).forEach(e=>{
+      chk(7);
+      const cats=(e.catIds||[e.catId]).map(id=>{
+        const cat=db.cats.find(c=>c.id===id);return cat?cat.name:'';
+      }).filter(Boolean).join(' + ');
+      const payLbl=e.payType==='cash'?'현금':'카드';
+      const shLbl=e.shared?'공통':'개인';
+      const memo=e.memo?' · '+e.memo:'';
+      const localStr=e.amtLocal&&e.currency&&e.currency!=='KRW'
+        ?`${e.currency} ${Math.round(e.amtLocal).toLocaleString()}  `:'' ;
+      const krwStr='KRW '+(e.amtKRW||0).toLocaleString();
+
+      doc.setFontSize(8.5);doc.setFont('helvetica','normal');
+      // 항목명 + 메모
+      const label=`  ${cats}${memo}`;
+      const lines=doc.splitTextToSize(label, RW*0.62);
+      doc.text(lines,M+2,y);
+      // 구분 + 결제
+      doc.setTextColor(120,120,120);
+      doc.text(`[${shLbl}/${payLbl}]`,M+2+RW*0.63,y);
+      doc.setTextColor(30,30,30);
+      // 금액
+      doc.setFont('helvetica','bold');
+      doc.text(localStr+krwStr,W-M,y,{align:'right'});
+      doc.setFont('helvetica','normal');
+      y+=lines.length>1?lines.length*4+1:5;
+    });
+
+    // 구분선
+    doc.setDrawColor(220);doc.line(M,y,W-M,y);y+=3;
+  });
+
+  // ── 푸터 ──
+  doc.setFontSize(7);doc.setTextColor(150,150,150);
+  doc.text(`Generated by Buen Camino  •  ${new Date().toLocaleDateString('ko-KR')}`,W/2,287,{align:'center'});
+
+  const fname=`BuenCamino_${p.name}_${from}_${to}.pdf`.replace(/[\s/]/g,'_');
   doc.save(fname);
 }
+
 
 function shareSettle(){
   const p=_getSettleProj();if(!p)return;
