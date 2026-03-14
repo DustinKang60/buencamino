@@ -446,9 +446,40 @@ let selDate=null, detailBackFn=null;
 // ══════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════
-function nav(sc){
+// ── History stack for Android back button ──
+let _histStack=[];
+function _showScreen(sc){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
   document.getElementById('sc-'+sc).classList.add('on');
+}
+function _pushHistory(sc){
+  history.pushState({sc}, '', location.href.split('#')[0]+'#'+sc);
+  _histStack.push(sc);
+}
+window.addEventListener('popstate', function(e){
+  // Android back pressed
+  const sc=e.state&&e.state.sc;
+  if(!sc||sc==='home'){
+    _histStack=[];
+    _showScreen('home');renderHome();
+  } else if(sc==='proj'){
+    _showScreen('proj');
+  } else if(sc==='detail'){
+    // going back from detail → proj
+    _showScreen('proj');
+    if(detailBackFn)detailBackFn();
+  } else if(sc==='cats'){
+    _showScreen('settings');renderSettings();
+  } else {
+    _showScreen(sc);
+    if(sc==='stats')renderStats();
+    if(sc==='settings')renderSettings();
+  }
+});
+
+function nav(sc){
+  _showScreen(sc);
+  _pushHistory(sc);
   if(sc==='home')renderHome();
   if(sc==='stats')renderStats();
   if(sc==='settings')renderSettings();
@@ -460,8 +491,8 @@ function openProj(id){
   selDate=null;
   const sd=curProj.startDate?new Date(curProj.startDate):new Date();
   calY=sd.getFullYear();calM=sd.getMonth();
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
-  document.getElementById('sc-proj').classList.add('on');
+  _showScreen('proj');
+  _pushHistory('proj');
   document.getElementById('proj-tb-title').textContent=(curProj.flag||'🌍')+' '+curProj.name;
   renderProjSummary();renderCal();renderMonthList();
   document.getElementById('day-panel').style.display='none';
@@ -471,13 +502,13 @@ function showDetail(title,bodyHTML,actHTML,backFn){
   document.getElementById('detail-body').innerHTML=bodyHTML;
   document.getElementById('detail-actions').innerHTML=actHTML;
   detailBackFn=backFn;
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
-  document.getElementById('sc-detail').classList.add('on');
+  _showScreen('detail');
+  _pushHistory('detail');
 }
 function closeDetail(){
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
-  document.getElementById('sc-proj').classList.add('on');
+  _showScreen('proj');
   if(detailBackFn)detailBackFn();
+  if(history.state&&history.state.sc==='detail')history.back();
 }
 
 let homeSearchOn=false;
@@ -519,7 +550,7 @@ function renderHome(){
             <span class="badge ${tb}">${tl}</span>
             ${p.country?`<span style="font-size:11px;color:var(--text3);">📍${p.country}</span>`:''}
             ${p.currency&&p.currency!=='KRW'?`<span style="font-size:11px;color:var(--text3);">${p.currency}</span>`:''}
-            ${p.startDate?`<span style="font-size:11px;color:var(--text3);">${p.startDate}</span>`:''}
+            ${p.startDate?`<span style="font-size:11px;color:var(--text3);">📅 ${p.startDate}${p.endDate?' ~ '+p.endDate:''}</span>`:''}
           </div>
         </div>
         <div style="text-align:right;flex-shrink:0;margin-left:12px;">
@@ -585,9 +616,15 @@ function openNewProject(){
         <option value="KRW">KRW — 원화 (국내)</option>
       </select>
     </div>
-    <div class="fgroup">
-      <label class="flabel">시작일</label>
-      <input class="finput" id="np-start" type="date" value="${todayStr()}" style="font-size:16px;"/>
+    <div class="frow">
+      <div class="fgroup">
+        <label class="flabel">출발일</label>
+        <input class="finput" id="np-start" type="date" value="${todayStr()}" style="font-size:16px;"/>
+      </div>
+      <div class="fgroup">
+        <label class="flabel">귀국일</label>
+        <input class="finput" id="np-end" type="date" value="${todayStr()}" style="font-size:16px;"/>
+      </div>
     </div>
     <div class="fgroup">
       <label class="flabel">동반자</label>
@@ -654,8 +691,9 @@ function saveNewProj(){
   const flag=cEl.dataset.flag||COUNTRIES.find(c=>c.n===country)?.f||'🌍';
   const currency=document.getElementById('np-cur').value;
   const start=document.getElementById('np-start').value;
+  const end=document.getElementById('np-end').value;
   npMembers.forEach(m=>{if(!db.friends.includes(m))db.friends.push(m);});
-  const proj={id:uid(),name,type,country,currency,flag,startDate:start,
+  const proj={id:uid(),name,type,country,currency,flag,startDate:start,endDate:end,
     members:[...npMembers],days:{},createdAt:Date.now()};
   db.projects.unshift(proj);npMembers=[];save();closeSheet();openProj(proj.id);
 }
@@ -675,7 +713,7 @@ function renderProjSummary(){
   <div class="card" style="margin-bottom:12px;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:${p.members&&p.members.length?'12px':'0'};">
       <div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:3px;">${typeMap[p.type]||''} · ${p.country||''} · ${p.currency} · ${days}일</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:3px;">${typeMap[p.type]||''} · ${p.country||''} · ${p.currency}${p.startDate?' · '+p.startDate+(p.endDate?' ~ '+p.endDate:''):''} · ${days}일 기록</div>
         <div style="font-size:24px;font-weight:700;color:var(--text);">${fmtW(total)}</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0;">
@@ -1059,7 +1097,7 @@ function previewPhoto(inp){
     diaryPhoto=e.target.result;
     const wrap=document.getElementById('photo-wrap');
     const img=document.getElementById('photo-img');
-    if(img)img.src=diaryPhoto;
+    if(img){img.src=diaryPhoto;img.dataset.ready='1';}
     if(wrap)wrap.style.display='';
   };
   reader.readAsDataURL(file);
@@ -1074,7 +1112,20 @@ function saveDiary(){
   if(!p||!selDate){alert('날짜를 선택하세요.');return;}
   if(!p.days[selDate])p.days[selDate]={expenses:[],diary:'',photo:null};
   p.days[selDate].diary=document.getElementById('diary-txt')?.value||'';
-  if(diaryPhoto!==null)p.days[selDate].photo=diaryPhoto;
+  // Read photo: prefer newly loaded (diaryPhoto var), else keep existing img src
+  const img=document.getElementById('photo-img');
+  const wrap=document.getElementById('photo-wrap');
+  if(diaryPhoto!==null){
+    p.days[selDate].photo=diaryPhoto;
+  } else if(img&&img.dataset.ready==='1'&&img.src){
+    p.days[selDate].photo=img.src;
+  } else if(wrap&&wrap.style.display!=='none'&&img&&img.src&&img.src.startsWith('data:')){
+    p.days[selDate].photo=img.src;
+  }
+  // If wrap hidden, photo was removed
+  if(wrap&&wrap.style.display==='none'){
+    p.days[selDate].photo=null;
+  }
   diaryPhoto=null;
   save();closeSheet();renderCal();renderDayPanel();renderMonthList();
 }
@@ -1421,6 +1472,8 @@ function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace
 // INIT
 // ══════════════════════════════════
 renderHome();
+// Push initial history state so Android back button stays in-app
+history.replaceState({sc:'home'}, '', location.href.split('#')[0]+'#home');
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 </script>
 </body>
