@@ -496,6 +496,7 @@ function openProj(id){
   document.getElementById('proj-tb-title').textContent=(curProj.flag||'🌍')+' '+curProj.name;
   renderProjSummary();renderCal();renderMonthList();
   document.getElementById('day-panel').style.display='none';
+  document.getElementById('month-list').style.display='';
 }
 function showDetail(title,bodyHTML,actHTML,backFn){
   document.getElementById('detail-title').textContent=title;
@@ -813,11 +814,24 @@ function renderCal(){
   }
   document.getElementById('cal-grid').innerHTML=html;
 }
-function calPrev(){calM--;if(calM<0){calM=11;calY--;}renderCal();renderMonthList();}
-function calNext(){calM++;if(calM>11){calM=0;calY++;}renderCal();renderMonthList();}
+function calPrev(){
+  calM--;if(calM<0){calM=11;calY--;}
+  selDate=null;
+  document.getElementById('day-panel').style.display='none';
+  document.getElementById('month-list').style.display='';
+  renderCal();renderMonthList();
+}
+function calNext(){
+  calM++;if(calM>11){calM=0;calY++;}
+  selDate=null;
+  document.getElementById('day-panel').style.display='none';
+  document.getElementById('month-list').style.display='';
+  renderCal();renderMonthList();
+}
 function selDay(ds){
   selDate=ds;renderCal();renderDayPanel();
   document.getElementById('day-panel').style.display='';
+  document.getElementById('month-list').style.display='none';
   setTimeout(()=>document.getElementById('day-panel').scrollIntoView({behavior:'smooth',block:'nearest'}),60);
 }
 
@@ -1106,77 +1120,93 @@ function openExpDetail(date,expId){
 // ══════════════════════════════════
 // DIARY
 // ══════════════════════════════════
-let diaryPhoto=null;
+// diaryPhoto stored outside sheet so it survives any re-render
+let _diaryPhotoData = null;   // base64 string | null = no change | 'REMOVE' = delete
 function openDiary(){
   if(!selDate||!curProj){alert('날짜를 먼저 선택하세요.');return;}
   const day=curProj.days[selDate]||{};
-  diaryPhoto=null;
+  _diaryPhotoData = null; // null = no change to existing photo
+  const existingPhoto = day.photo||null;
   showSheet(`
     <div class="s-handle"></div>
     <div class="s-title">📖 ${selDate} 일기</div>
     <div class="fgroup">
       <textarea class="finput" id="diary-txt" placeholder="오늘의 여행 이야기를 기록하세요…"
-        style="min-height:140px;font-size:16px;">${day.diary||''}</textarea>
+        style="min-height:140px;font-size:16px;">${esc(day.diary||'')}</textarea>
     </div>
     <div class="fgroup">
       <label class="flabel">사진 1장</label>
-      ${day.photo?`<div style="position:relative;margin-bottom:8px;" id="photo-wrap">
-        <img src="${day.photo}" id="photo-img" style="width:100%;border-radius:12px;max-height:180px;object-fit:cover;"/>
-        <button onclick="rmPhoto()" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.6);border:none;color:#fff;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;">×</button>
-      </div>`:
-      `<div id="photo-wrap" style="display:none;position:relative;margin-bottom:8px;">
-        <img id="photo-img" style="width:100%;border-radius:12px;max-height:180px;object-fit:cover;"/>
-        <button onclick="rmPhoto()" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.6);border:none;color:#fff;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;">×</button>
-      </div>`}
-      <div onclick="document.getElementById('diary-file').click()" style="border:2px dashed var(--border2);border-radius:10px;padding:18px;text-align:center;cursor:pointer;color:var(--text3);font-size:13px;">
+      <div id="photo-preview" style="${existingPhoto?'':'display:none;'}position:relative;margin-bottom:10px;">
+        <img id="photo-img" src="${existingPhoto||''}" style="width:100%;border-radius:12px;max-height:200px;object-fit:cover;"/>
+        <button onclick="rmDiaryPhoto()" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.65);border:none;color:#fff;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;">×</button>
+      </div>
+      <div id="photo-add-btn" onclick="document.getElementById('diary-file').click()"
+        style="${existingPhoto?'display:none;':''}border:2px dashed var(--border2);border-radius:10px;padding:18px;text-align:center;cursor:pointer;color:var(--text3);font-size:13px;">
         📷 사진 선택
       </div>
-      <input type="file" id="diary-file" accept="image/*" style="display:none;" onchange="previewPhoto(this)"/>
+      <input type="file" id="diary-file" accept="image/*" style="display:none;" onchange="onDiaryPhotoSelected(this)"/>
     </div>
+    <div id="diary-save-status" style="display:none;text-align:center;font-size:12px;color:var(--text3);padding:6px 0;">사진 처리 중…</div>
     <div class="s-actions">
       <button class="btn btn-g" style="flex:1;" onclick="closeSheet()">취소</button>
-      <button class="btn btn-p" style="flex:1;" onclick="saveDiary()">저장</button>
+      <button class="btn btn-p" style="flex:1;" id="diary-save-btn" onclick="saveDiary()">저장</button>
     </div>
   `);
 }
 
-function previewPhoto(inp){
-  const file=inp.files[0];if(!file)return;
+function onDiaryPhotoSelected(inp){
+  const file=inp.files[0]; if(!file) return;
+  // Show loading state
+  const status=document.getElementById('diary-save-status');
+  const saveBtn=document.getElementById('diary-save-btn');
+  if(status) status.style.display='';
+  if(saveBtn) saveBtn.disabled=true;
+
   const reader=new FileReader();
   reader.onload=e=>{
-    diaryPhoto=e.target.result;
-    const wrap=document.getElementById('photo-wrap');
+    _diaryPhotoData = e.target.result; // stored OUTSIDE sheet DOM
+    // Update preview
+    const preview=document.getElementById('photo-preview');
     const img=document.getElementById('photo-img');
-    if(img){img.src=diaryPhoto;img.dataset.ready='1';}
-    if(wrap)wrap.style.display='';
+    const addBtn=document.getElementById('photo-add-btn');
+    if(img) img.src=_diaryPhotoData;
+    if(preview) preview.style.display='';
+    if(addBtn) addBtn.style.display='none';
+    if(status) status.style.display='none';
+    if(saveBtn){ saveBtn.disabled=false; }
+  };
+  reader.onerror=()=>{
+    alert('사진을 읽을 수 없습니다.');
+    if(status) status.style.display='none';
+    if(saveBtn) saveBtn.disabled=false;
   };
   reader.readAsDataURL(file);
 }
-function rmPhoto(){
-  diaryPhoto=null;
-  const wrap=document.getElementById('photo-wrap');
-  if(wrap)wrap.style.display='none';
+
+function rmDiaryPhoto(){
+  _diaryPhotoData='REMOVE';
+  const preview=document.getElementById('photo-preview');
+  const addBtn=document.getElementById('photo-add-btn');
+  if(preview) preview.style.display='none';
+  if(addBtn) addBtn.style.display='';
 }
+
 function saveDiary(){
   const p=curProj;
   if(!p||!selDate){alert('날짜를 선택하세요.');return;}
-  if(!p.days[selDate])p.days[selDate]={expenses:[],diary:'',photo:null};
-  p.days[selDate].diary=document.getElementById('diary-txt')?.value||'';
-  // Read photo: prefer newly loaded (diaryPhoto var), else keep existing img src
-  const img=document.getElementById('photo-img');
-  const wrap=document.getElementById('photo-wrap');
-  if(diaryPhoto!==null){
-    p.days[selDate].photo=diaryPhoto;
-  } else if(img&&img.dataset.ready==='1'&&img.src){
-    p.days[selDate].photo=img.src;
-  } else if(wrap&&wrap.style.display!=='none'&&img&&img.src&&img.src.startsWith('data:')){
-    p.days[selDate].photo=img.src;
-  }
-  // If wrap hidden, photo was removed
-  if(wrap&&wrap.style.display==='none'){
+  if(!p.days[selDate]) p.days[selDate]={expenses:[],diary:'',photo:null};
+  const txt=document.getElementById('diary-txt');
+  p.days[selDate].diary=txt?txt.value:'';
+  // Photo logic:
+  // _diaryPhotoData === null   → no change (keep existing)
+  // _diaryPhotoData === 'REMOVE' → delete photo
+  // _diaryPhotoData === 'data:...' → new photo
+  if(_diaryPhotoData==='REMOVE'){
     p.days[selDate].photo=null;
+  } else if(_diaryPhotoData!==null){
+    p.days[selDate].photo=_diaryPhotoData;
   }
-  diaryPhoto=null;
+  _diaryPhotoData=null;
   save();closeSheet();renderCal();renderDayPanel();renderMonthList();
 }
 
