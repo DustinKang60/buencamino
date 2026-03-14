@@ -1885,46 +1885,116 @@ function _shareTextOnly(txt){
 function renderStats(){
   const el=document.getElementById('stats-body');
   if(!db.projects.length){
-    el.innerHTML=`<div class="empty"><div class="empty-ico">📊</div><div class="empty-t">여행 기록이 없습니다</div></div>`;return;
+    el.innerHTML=`<div class="empty"><div class="empty-ico">📊</div><div class="empty-t">여행 기록이 없습니다</div></div>`;
+    return;
   }
-  const all=[];
-  db.projects.forEach(p=>Object.values(p.days||{}).forEach(d=>(d.expenses||[]).forEach(e=>all.push({...e,pFlag:p.flag,pName:p.name}))));
-  const grand=all.reduce((s,e)=>s+(e.amtKRW||0),0);
-  const byCat={};
-  all.forEach(e=>(e.catIds||[e.catId]).forEach(id=>{
-    const c=db.cats.find(c=>c.id===id)||{name:'기타',icon:'💡'};
-    if(!byCat[c.name]){byCat[c.name]={icon:c.icon,total:0};}
-    byCat[c.name].total+=(e.amtKRW||0)/((e.catIds||[e.catId]).length);
-  }));
-  const catS=Object.entries(byCat).sort((a,b)=>b[1].total-a[1].total).slice(0,8);
-  const maxC=catS[0]?.[1]?.total||1;
-  const projS=db.projects.map(p=>({...p,total:projTotal(p),pct:grand?Math.round(projTotal(p)/grand*100):0}))
-    .filter(p=>p.total>0).sort((a,b)=>b.total-a.total);
+
+  const projs=db.projects.filter(p=>projTotal(p)>0);
+  if(!projs.length){
+    el.innerHTML=`<div class="empty"><div class="empty-ico">📊</div><div class="empty-t">지출 기록이 없습니다</div></div>`;
+    return;
+  }
+
+  const cards=projs.map(p=>{
+    const total=projTotal(p);
+    const allExps=Object.values(p.days||{}).flatMap(d=>d.expenses||[]);
+    const shared=allExps.filter(e=>e.shared).reduce((s,e)=>s+(e.amtKRW||0),0);
+    const personal=total-shared;
+
+    // 여행 일수 (출발일~귀국일 또는 기록된 날짜 범위)
+    let days=0;
+    if(p.startDate&&p.endDate){
+      const ms=new Date(p.endDate)-new Date(p.startDate);
+      days=Math.round(ms/(1000*60*60*24))+1;
+    } else {
+      const dates=Object.keys(p.days||{}).sort();
+      if(dates.length>=2){
+        const ms=new Date(dates[dates.length-1])-new Date(dates[0]);
+        days=Math.round(ms/(1000*60*60*24))+1;
+      } else days=dates.length||1;
+    }
+    const dayAvg=days>0?Math.round(total/days):total;
+
+    // 카테고리별 합산 TOP3
+    const byCat={};
+    allExps.forEach(e=>(e.catIds||[e.catId]).forEach(id=>{
+      const cat=db.cats.find(c=>c.id===id)||{name:'기타',icon:'💡'};
+      if(!byCat[cat.name])byCat[cat.name]={icon:cat.icon,total:0};
+      byCat[cat.name].total+=(e.amtKRW||0)/((e.catIds||[e.catId]).length);
+    }));
+    const top3=Object.entries(byCat).sort((a,b)=>b[1].total-a[1].total).slice(0,3);
+    const maxCat=top3[0]?.[1]?.total||1;
+
+    // 공통/개인 비율
+    const sharedPct=total>0?Math.round(shared/total*100):0;
+    const personalPct=100-sharedPct;
+
+    const members=['나',...(p.members||[])];
+    const n=members.length;
+    const perPerson=n>1?Math.round(shared/n):0;
+
+    return`<div class="card" style="margin-bottom:14px;">
+      <!-- 헤더 -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px;">${p.flag||'🌍'} ${p.name}</div>
+          <div style="font-size:11px;color:var(--text3);">${p.startDate||''}${p.endDate?' ~ '+p.endDate:''} · ${days}일</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:18px;font-weight:700;color:var(--text);">${fmtW(total)}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">1일 평균 ${fmtW(dayAvg)}</div>
+        </div>
+      </div>
+
+      <!-- 공통/개인 비율 -->
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:5px;">
+          <span style="font-size:11px;color:var(--text3);">공통 ${sharedPct}%</span>
+          <span style="font-size:11px;color:var(--text3);">개인 ${personalPct}%</span>
+        </div>
+        <div style="height:8px;border-radius:4px;background:var(--surface3);overflow:hidden;display:flex;">
+          <div style="width:${sharedPct}%;background:var(--amber);border-radius:4px 0 0 4px;transition:width .4s;"></div>
+          <div style="width:${personalPct}%;background:var(--accent);border-radius:0 4px 4px 0;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:5px;">
+          <span style="font-size:12px;font-weight:600;color:var(--amber);">${fmtW(shared)}</span>
+          <span style="font-size:12px;font-weight:600;color:var(--accent2);">${fmtW(personal)}</span>
+        </div>
+        ${n>1?`<div style="margin-top:6px;padding:7px 10px;background:var(--green-bg);border:1px solid var(--green-border);border-radius:8px;font-size:12px;color:var(--green);text-align:center;">
+          1인당 공통 부담 ${fmtW(perPerson)} (${n}명)
+        </div>`:''}
+      </div>
+
+      <!-- TOP3 카테고리 -->
+      ${top3.length?`<div>
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:8px;">지출 TOP 3</div>
+        ${top3.map(([name,info])=>{
+          const pct=Math.round(info.total/maxCat*100);
+          const catPct=Math.round(info.total/total*100);
+          return`<div style="margin-bottom:8px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
+              <span style="font-size:12px;color:var(--text2);">${info.icon} ${name}</span>
+              <span style="font-size:12px;font-weight:600;color:var(--text);">${fmtW(Math.round(info.total))} <span style="font-size:10px;color:var(--text3);">${catPct}%</span></span>
+            </div>
+            <div class="prog"><div class="prog-fill" style="width:${pct}%;"></div></div>
+          </div>`;
+        }).join('')}
+      </div>`:''}
+    </div>`;
+  }).join('');
 
   el.innerHTML=`
-  <div class="card" style="margin-bottom:14px;">
-    <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:5px;">전체 여행 지출</div>
-    <div style="font-size:28px;font-weight:700;color:var(--text);">${fmtW(grand)}</div>
-    <div style="font-size:11px;color:var(--text3);margin-top:4px;">${db.projects.length}개 프로젝트 · ${all.length}건</div>
-  </div>
-  <div class="sec-hdr"><span class="sec-t">카테고리별</span></div>
-  <div class="card" style="margin-bottom:14px;">
-    ${catS.map(([name,info])=>`<div style="margin-bottom:11px;">
-      <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
-        <span style="font-size:12px;color:var(--text2);">${info.icon} ${name}</span>
-        <span style="font-size:12px;font-weight:600;color:var(--text);">${fmtW(Math.round(info.total))}</span>
-      </div>
-      <div class="prog"><div class="prog-fill" style="width:${Math.round(info.total/maxC*100)}%;"></div></div>
-    </div>`).join('')}
-  </div>
-  ${projS.length?`<div class="sec-hdr"><span class="sec-t">여행별</span></div>
-  <div class="card">
-    ${projS.map(p=>`<div class="row">
-      <div><div style="font-size:13px;color:var(--text);">${p.flag||'🌍'} ${p.name}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:1px;">${p.pct}%</div></div>
-      <div style="font-size:14px;font-weight:700;">${fmtW(p.total)}</div>
-    </div>`).join('')}
-  </div>`:''}`;
+    <div style="font-size:11px;color:var(--text3);padding:4px 0 12px;">여행 ${projs.length}개 · 탭하면 정산으로 이동</div>
+    ${cards}`;
+
+  // 카드 탭 시 해당 프로젝트 정산으로 이동
+  el.querySelectorAll('.card').forEach((card,i)=>{
+    card.style.cursor='pointer';
+    card.addEventListener('click',()=>{
+      curProj=projs[i];
+      nav('settle');
+    });
+  });
 }
 
 // ══════════════════════════════════
@@ -2195,6 +2265,24 @@ function _useCalcResult(){
 // ══════════════════════════════════
 // INIT
 // ══════════════════════════════════
+// 기존 데이터에 누락된 기본 카테고리 자동 보완
+(function(){
+  const toAdd=[
+    {id:'golf_massage',name:'마사지',icon:'💆',group:'골프'},
+  ];
+  let changed=false;
+  toAdd.forEach(item=>{
+    if(!db.cats.find(c=>c.id===item.id)){
+      // 같은 그룹 마지막에 삽입
+      const lastIdx=db.cats.map((c,i)=>c.group===item.group?i:-1).filter(i=>i>=0).pop();
+      if(lastIdx!==undefined) db.cats.splice(lastIdx+1,0,item);
+      else db.cats.push(item);
+      changed=true;
+    }
+  });
+  if(changed) save();
+})();
+
 renderHome();
 // Render settle nav on load
 (function(){
