@@ -976,7 +976,7 @@ function filterMonthList(){
         <div class="li-bar" style="background:var(--accent);"></div>
         <div class="li-ico exp">${(db.cats.find(c=>c.id===(e.catIds||[e.catId])[0])||{icon:'💡'}).icon}</div>
         <div class="li-body"><div class="li-title">${getCatNames(e.catIds||[e.catId])}</div></div>
-        <div class="li-r"><div class="li-amt">${fmtW(e.amtKRW||0)}</div></div>
+        <div class="li-r">${e.amtLocal&&e.currency&&e.currency!=='KRW'?`<div style="font-size:12px;font-weight:700;color:var(--text);">${fmtLocal2(e.amtLocal,e.currency)}</div><div style="font-size:10px;color:var(--text3);">(${fmtW(e.amtKRW||0)})</div>`:`<div class="li-amt">${fmtW(e.amtKRW||0)}</div>`}</div>
         <span class="li-arr">›</span></div>`).join('')}
     </div>`;
   });
@@ -993,46 +993,67 @@ function getCatNames(ids){
 // ══════════════════════════════════
 function openAddExp(expId){
   const p=curProj;
-  if(!selDate||!p){alert('날짜를 먼저 선택하세요.');return;}
+  if(!selDate) selDate=todayStr();
+  if(!p){alert('프로젝트를 먼저 선택하세요.');return;}
   const isEdit=!!expId;
   const day=p.days[selDate]||{};
   const ex=isEdit?(day.expenses||[]).find(e=>e.id===expId):null;
   const isLocal=(p.currency||'KRW')!=='KRW';
-  const exCatIds=ex?(ex.catIds||[ex.catId]):[db.cats[0]?.id];
+  const isGolf=p.name&&p.name.includes('골프');
+  const sortedCats=isGolf
+    ?[...db.cats.filter(cat=>cat.group==='골프'),...db.cats.filter(cat=>cat.group!=='골프')]
+    :[...db.cats.filter(cat=>cat.group==='기본'),...db.cats.filter(cat=>cat.group!=='기본')];
+  const exCatIds=ex?(ex.catIds||[ex.catId]):[];
+  const defPay=ex?ex.payType||'card':'card';
 
   showSheet(`
     <div class="s-handle"></div>
-    <div class="s-title">${isEdit?'지출 수정':'지출 추가'} · ${selDate}</div>
+    <div class="s-title">${isEdit?'지출 수정':'지출 추가'}</div>
+    <div class="fgroup">
+      <label class="flabel">날짜</label>
+      <input class="finput" id="ae-date" type="date" value="${selDate}" style="font-size:16px;"/>
+    </div>
     <div class="fgroup">
       <label class="flabel">지출 항목 (복수 선택)</label>
-      <div class="chips" id="ae-cats" style="max-height:150px;overflow-y:auto;">
-        ${db.cats.map(c=>`<button class="chip${exCatIds.includes(c.id)?' on':''}" data-v="${c.id}" onclick="this.classList.toggle('on');updateKRWPrev()">${c.icon} ${c.name}${c.group!=='기본'?` <span style="font-size:10px;opacity:.55;">[${c.group}]</span>`:''}</button>`).join('')}
+      <div class="chips" id="ae-cats" style="max-height:160px;overflow-y:auto;">
+        ${sortedCats.map(cat=>`<button class="chip${exCatIds.includes(cat.id)?' on':''}" data-v="${cat.id}" onclick="this.classList.toggle('on');updateSelLabel();">${cat.icon} ${cat.name}</button>`).join('')}
       </div>
     </div>
     <div id="ae-sel-label" style="background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:8px;padding:7px 11px;margin-bottom:12px;font-size:12px;color:var(--accent2);display:none;"></div>
     <div class="frow">
       <div class="fgroup">
-        <label class="flabel">금액${isLocal?` (${p.currency})`:'(₩)'}</label>
-        <input class="finput" id="ae-amt" type="number" inputmode="decimal" placeholder="0"
-          value="${ex?(isLocal?ex.amtLocal:ex.amtKRW)||'':''}" style="font-size:16px;" oninput="updateKRWPrev()"/>
+        <label class="flabel" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>금액${isLocal?` (${p.currency})`:' (₩)'}</span>
+          <button type="button" onclick="openCalcFromExp()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:11px;padding:0;">🧮 계산기</button>
+        </label>
+        <input class="finput" id="ae-amt" type="text" inputmode="decimal" placeholder="0"
+          value="${ex?(isLocal?fmtComma(ex.amtLocal):fmtComma(ex.amtKRW))||'':''}"
+          style="font-size:16px;" oninput="fmtInputComma(this);updateKRWPrev()"/>
       </div>
       ${isLocal?`<div class="fgroup">
         <label class="flabel">환율 (1${p.currency}=₩) <span id="ae-spin" style="display:none;"><span class="spin"></span></span></label>
-        <input class="finput" id="ae-rate" type="number" inputmode="decimal" placeholder="자동조회"
-          value="${ex?ex.rate||'':''}" style="font-size:16px;" oninput="updateKRWPrev()"/>
+        <input class="finput" id="ae-rate" type="text" inputmode="decimal" placeholder="자동조회"
+          value="${ex?fmtComma(ex.rate)||'':''}" style="font-size:16px;" oninput="fmtInputComma(this);updateKRWPrev()"/>
       </div>`:''}
     </div>
     <div id="ae-prev" style="display:none;" class="krw-prev"></div>
     <div class="fgroup">
+      <label class="flabel">결제 수단</label>
+      <div class="chips" id="ae-pay">
+        <button class="chip${defPay==='card'?' on':''}" data-v="card" onclick="pickChip(this,'ae-pay')">💳 카드</button>
+        <button class="chip${defPay==='cash'?' on':''}" data-v="cash" onclick="pickChip(this,'ae-pay')">💵 현금</button>
+      </div>
+    </div>
+    <div class="fgroup">
       <label class="flabel">구분</label>
       <div class="chips" id="ae-shared">
         <button class="chip${ex&&!ex.shared?' on':!ex&&(!p.members||!p.members.length)?' on':''}" data-v="personal" onclick="pickChip(this,'ae-shared')">👤 개인</button>
-        <button class="chip${ex?.shared||(!ex&&p.members&&p.members.length>0)?' on':''}" data-v="shared" onclick="pickChip(this,'ae-shared')">👥 공통 ${p.members&&p.members.length?`(${p.members.length+1}명)`:''}  </button>
+        <button class="chip${ex?.shared||(!ex&&p.members&&p.members.length>0)?' on':''}" data-v="shared" onclick="pickChip(this,'ae-shared')">👥 공통 ${p.members&&p.members.length?`(${p.members.length+1}명)`:''}</button>
       </div>
     </div>
     <div class="fgroup">
       <label class="flabel">메모</label>
-      <input class="finput" id="ae-memo" placeholder="간단 메모 (선택)" value="${ex?ex.memo||'':''}"
+      <input class="finput" id="ae-memo" placeholder="간단 메모 (선택)" value="${ex?esc(ex.memo||''):''}"
         autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" style="font-size:16px;"/>
     </div>
     <div class="s-actions">
@@ -1041,14 +1062,8 @@ function openAddExp(expId){
       <button class="btn btn-p" style="flex:1;" onclick="saveExp('${expId||''}')">저장</button>
     </div>
   `);
-
   if(isLocal&&!ex?.rate) fetchRate(p.currency,selDate);
   updateKRWPrev();
-
-  // Update selected label on chip toggle
-  document.querySelectorAll('#ae-cats .chip').forEach(c=>{
-    c.addEventListener('click',updateSelLabel);
-  });
   updateSelLabel();
 }
 
@@ -1064,7 +1079,8 @@ function updateSelLabel(){
 
 function updateKRWPrev(){
   updateSelLabel();
-  const p=curProj; const isLocal=p&&p.currency&&p.currency!=='KRW';
+  const p=curProj;
+  const isLocal=p&&p.currency&&p.currency!=='KRW';
   if(!isLocal)return;
   const amt=parseFloat((document.getElementById('ae-amt')?.value||'').replace(/,/g,''))||0;
   const rate=parseFloat((document.getElementById('ae-rate')?.value||'').replace(/,/g,''))||0;
@@ -1098,7 +1114,7 @@ function setRate(v){
 function saveExp(expId){
   const p=curProj;
   if(!p){alert('프로젝트를 선택하세요.');return;}
-  const catIds=[...document.querySelectorAll('#ae-cats .chip.on')].map(btn=>btn.dataset.v);
+  const catIds=[...document.querySelectorAll('#ae-cats .chip.on')].map(b=>b.dataset.v);
   if(!catIds.length){alert('항목을 하나 이상 선택하세요.');return;}
   const isLocal=p.currency&&p.currency!=='KRW';
   const amtRaw=(document.getElementById('ae-amt')?.value||'').replace(/,/g,'');
@@ -1110,22 +1126,17 @@ function saveExp(expId){
   const shared=getChip('ae-shared')==='shared';
   const payType=getChip('ae-pay')||'card';
   const memo=document.getElementById('ae-memo')?.value.trim()||'';
-  // 날짜: 입력창 값 우선
   const dateInput=document.getElementById('ae-date');
-  const targetDate=dateInput?dateInput.value:selDate;
+  const targetDate=dateInput?dateInput.value:(selDate||todayStr());
   if(!targetDate){alert('날짜를 입력하세요.');return;}
   selDate=targetDate;
-
   if(!p.days[targetDate])p.days[targetDate]={expenses:[],diary:'',photo:null};
   const rec={catId:catIds[0],catIds,amtLocal,amtKRW,currency:p.currency,
     rate:isLocal?rate:null,shared,payType,memo,date:targetDate};
-
   if(expId){
-    // 날짜가 바뀌었을 수 있으니 원본 날짜에서 찾아서 삭제 후 새 날짜에 추가
-    let found=false;
     Object.values(p.days).forEach(day=>{
       const idx=(day.expenses||[]).findIndex(e=>e.id===expId);
-      if(idx>=0){day.expenses[idx]={...day.expenses[idx],...rec};found=true;}
+      if(idx>=0)day.expenses[idx]={...day.expenses[idx],...rec};
     });
   } else {
     p.days[targetDate].expenses.push({id:uid(),...rec,createdAt:Date.now()});
