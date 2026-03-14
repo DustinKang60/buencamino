@@ -11,13 +11,13 @@
   "lang": "ko",
   "icons": [
     {
-      "src": "/buen-camino-v3/icons/icon-192x192.png",
+      "src": "/buencamino/icons/icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/buen-camino-v3/icons/icon-512x512.png",
+      "src": "/buencamino/icons/icon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
