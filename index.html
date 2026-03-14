@@ -1657,16 +1657,38 @@ function _writePDFContent(doc,p,from,to,latinOnly){
     chk(12);
     const dt=new Date(date+'T00:00:00');
     const dl=`${dt.getMonth()+1}/${dt.getDate()}(${dns[dt.getDay()]})`;
-    const dayTotal=(day.expenses||[]).reduce((s,e)=>s+(e.amtKRW||0),0);
+    const dayExps=day.expenses||[];
+    const dayTotal=dayExps.reduce((s,e)=>s+(e.amtKRW||0),0);
 
-    // 날짜 헤더
+    // 페소 합계 + 대표 환율 계산
+    const isLocal=p.currency&&p.currency!=='KRW';
+    let dayLocalTotal=0, dayRate=0, rateCount=0;
+    if(isLocal){
+      dayExps.forEach(e=>{
+        if(e.amtLocal) dayLocalTotal+=e.amtLocal;
+        if(e.rate){dayRate+=e.rate;rateCount++;}
+      });
+      dayRate=rateCount>0?Math.round(dayRate/rateCount):0;
+    }
+
+    // 날짜 헤더 (2줄 높이 확보)
+    const hdrH=isLocal&&dayLocalTotal?9:6;
     doc.setFillColor(235,240,250);
-    doc.rect(M,y-3.5,RW,6,'F');
+    doc.rect(M,y-3.5,RW,hdrH,'F');
     doc.setFontSize(9);doc.setTextColor(15,21,40);
     doc.text(dl,M+2,y);
     doc.text(KRW(dayTotal),W-M,y,{align:'right'});
-    doc.setTextColor(30,30,30);
-    y+=7;
+    if(isLocal&&dayLocalTotal&&dayRate){
+      doc.setFontSize(7.5);doc.setTextColor(80,80,160);
+      const sym={JPY:'¥',USD:'$',PHP:'₱',THB:'฿',VND:'₫',EUR:'€',GBP:'£',HKD:'HK$',SGD:'S$',TWD:'NT$',MYR:'RM',IDR:'Rp',CNY:'¥',AUD:'A$',CAD:'C$',CHF:'Fr'};
+      const s=sym[p.currency]||p.currency;
+      doc.text(`${s}${Math.round(dayLocalTotal).toLocaleString()}  @${dayRate.toLocaleString()}`,M+2,y+4);
+      doc.setTextColor(30,30,30);
+      y+=hdrH+2;
+    } else {
+      doc.setTextColor(30,30,30);
+      y+=7;
+    }
 
     (day.expenses||[]).forEach(e=>{
       chk(8);
@@ -1718,17 +1740,99 @@ function shareSettle(){
   });
   const grand=all.reduce((s,e)=>s+(e.amtKRW||0),0);
   const sharedTotal=all.filter(e=>e.shared).reduce((s,e)=>s+(e.amtKRW||0),0);
+  const personalTotal=grand-sharedTotal;
   const perPerson=n>1?Math.round(sharedTotal/n):0;
+
+  // 날짜별 소계 텍스트
+  const dns=['일','월','화','수','목','금','토'];
+  const dayLines=Object.entries(p.days||{})
+    .filter(([d])=>d>=from&&d<=to&&(p.days[d].expenses||[]).length)
+    .sort(([a],[b])=>a.localeCompare(b))
+    .map(([date,day])=>{
+      const dt=new Date(date+'T00:00:00');
+      const dl=`${dt.getMonth()+1}/${dt.getDate()}(${dns[dt.getDay()]})`;
+      const tot=(day.expenses||[]).reduce((s,e)=>s+(e.amtKRW||0),0);
+      return`  ${dl}  ${fmtW(tot)}`;
+    });
+
   const lines=[
     `✈️ ${p.flag||''} ${p.name} 정산`,
-    `📅 ${from} ~ ${to}`,``,
+    `📅 ${from} ~ ${to}`,
+    ``,
     `💰 총 지출: ${fmtW(grand)}`,
-    `👥 공통 지출: ${fmtW(sharedTotal)}`,
-    n>1?`👤 1인당 부담: ${fmtW(perPerson)}`:'',
-    ``,`— Buen Camino`,
+    `👤 개인: ${fmtW(personalTotal)}`,
+    `👥 공통: ${fmtW(sharedTotal)}`,
+    n>1?`💵 1인당 부담: ${fmtW(perPerson)}`:'',
+    n>1?``:'',
+    ...(n>1?(p.members||[]).map(m=>`  ${m} → ${fmtW(perPerson)} 받기`):[]),
+    ``,
+    `📋 일별 내역`,
+    ...dayLines,
+    ``,
+    `— Buen Camino`,
   ].filter(l=>l!==undefined);
   const txt=lines.join('\n');
-  if(navigator.share)navigator.share({title:'',text:txt});
+
+  // PDF 파일 첨부 공유 시도
+  _shareWithPDF(p,from,to,txt);
+}
+
+function _shareWithPDF(p,from,to,txt){
+  // PDF 생성 후 파일로 공유
+  const tryShareWithFile=(pdfBlob)=>{
+    const fname=`BuenCamino_${p.name}_${from}_${to}.pdf`.replace(/[\s/]/g,'_');
+    const file=new File([pdfBlob],fname,{type:'application/pdf'});
+    if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+      navigator.share({title:`${p.name} 정산`,text:txt,files:[file]})
+        .catch(()=>_shareTextOnly(txt));
+    } else {
+      // 파일 공유 미지원 → 텍스트만 공유 + PDF 다운로드
+      _shareTextOnly(txt);
+      // PDF도 자동 다운로드
+      const url=URL.createObjectURL(pdfBlob);
+      const a=document.createElement('a');a.href=url;a.download=fname;a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),3000);
+    }
+  };
+
+  // jsPDF로 PDF blob 생성
+  const makePDFBlob=()=>{
+    try{
+      const {jsPDF}=window.jspdf;
+      const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+      if(window._krFontBuf){
+        const fd=_arrayBufferToBase64(window._krFontBuf);
+        doc.addFileToVFS('NanumGothic.ttf',fd);
+        doc.addFont('NanumGothic.ttf','NanumGothic','normal');
+        doc.setFont('NanumGothic');
+      }
+      _writePDFContent(doc,p,from,to);
+      return doc.output('blob');
+    }catch(e){return null;}
+  };
+
+  if(window.jspdf){
+    const blob=makePDFBlob();
+    if(blob) tryShareWithFile(blob);
+    else _shareTextOnly(txt);
+  } else {
+    // jsPDF 없으면 텍스트만
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload=()=>{
+      const blob=makePDFBlob();
+      if(blob) tryShareWithFile(blob);
+      else _shareTextOnly(txt);
+    };
+    s.onerror=()=>_shareTextOnly(txt);
+    document.head.appendChild(s);
+  }
+}
+
+function _shareTextOnly(txt){
+  if(navigator.share) navigator.share({title:'',text:txt}).catch(()=>{
+    navigator.clipboard?.writeText(txt);alert('클립보드에 복사됐어요!');
+  });
   else{navigator.clipboard?.writeText(txt);alert('클립보드에 복사됐어요!');}
 }
 
