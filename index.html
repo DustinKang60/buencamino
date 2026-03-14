@@ -542,7 +542,12 @@ function renderHome(){
     const days=Object.keys(p.days||{}).length;
     const [tl,tb]=typeMap[p.type]||['기타','badge-b'];
     const members=(p.members||[]).slice(0,3).join(', ')+(p.members&&p.members.length>3?` 외 ${p.members.length-3}명`:'');
-    return`<div class="card card-tap fade-up" onclick="openProj('${p.id}')">
+    return`<div class="card fade-up proj-card" id="pc-${p.id}"
+      onclick="projCardTap(event,'${p.id}')"
+      oncontextmenu="return false;"
+      ontouchstart="lpStart('${p.id}')" ontouchend="lpEnd()" ontouchmove="lpEnd()"
+      onmousedown="lpStart('${p.id}')" onmouseup="lpEnd()" onmouseleave="lpEnd()"
+      style="cursor:pointer;transition:transform .12s,opacity .12s;position:relative;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:${members?'10px':'0'};">
         <div style="flex:1;min-width:0;">
           <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:5px;">${p.flag||'🌍'} ${p.name}</div>
@@ -559,12 +564,57 @@ function renderHome(){
         </div>
       </div>
       ${members?`<div style="padding-top:8px;border-top:1px solid var(--border);font-size:11px;color:var(--text2);">👥 ${members}</div>`:''}
+      <!-- delete bar (hidden by default) -->
+      <div class="proj-del-bar" id="delbar-${p.id}" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--red-border);">
+        <button onclick="deleteProj(event,'${p.id}')"
+          style="width:100%;background:var(--red-bg);color:var(--red);border:1px solid var(--red-border);
+          border-radius:8px;padding:10px;font-size:13px;font-weight:600;font-family:var(--ff);cursor:pointer;">
+          🗑 이 여행 삭제
+        </button>
+        <div style="text-align:center;font-size:11px;color:var(--text3);margin-top:6px;">취소하려면 다른 곳을 누르세요</div>
+      </div>
     </div>`;
   }).join('');
 }
 
 function projTotal(p){
   return Object.values(p.days||{}).reduce((s,d)=>(d.expenses||[]).reduce((a,e)=>a+(e.amtKRW||0),s),0);
+}
+
+// ── Long-press delete ──
+let _lpTimer=null, _lpId=null, _lpFired=false;
+function lpStart(id){
+  _lpFired=false; _lpId=id;
+  _lpTimer=setTimeout(()=>{
+    _lpFired=true;
+    // hide all other del bars first
+    document.querySelectorAll('.proj-del-bar').forEach(b=>b.style.display='none');
+    document.querySelectorAll('.proj-card').forEach(c=>{c.style.transform='';c.style.opacity='';});
+    const bar=document.getElementById('delbar-'+id);
+    const card=document.getElementById('pc-'+id);
+    if(bar){bar.style.display='';} 
+    if(card){card.style.opacity='.9';}
+    // tap outside to dismiss
+    setTimeout(()=>document.addEventListener('touchstart',dismissDelBar,{once:true}),100);
+    setTimeout(()=>document.addEventListener('mousedown',dismissDelBar,{once:true}),100);
+  },600);
+}
+function lpEnd(){clearTimeout(_lpTimer);}
+function projCardTap(e,id){
+  if(_lpFired){_lpFired=false;return;}// swallow tap after long-press
+  openProj(id);
+}
+function dismissDelBar(e){
+  // if tapped inside a del bar, let the button handle it
+  if(e.target.closest&&e.target.closest('.proj-del-bar'))return;
+  document.querySelectorAll('.proj-del-bar').forEach(b=>b.style.display='none');
+  document.querySelectorAll('.proj-card').forEach(c=>{c.style.opacity='';});
+}
+function deleteProj(e,id){
+  e.stopPropagation();
+  if(!confirm('이 여행 프로젝트를 삭제할까요?\n모든 지출·일기 기록이 함께 삭제됩니다.'))return;
+  db.projects=db.projects.filter(p=>p.id!==id);
+  save();renderHome();
 }
 
 // ══════════════════════════════════
