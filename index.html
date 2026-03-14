@@ -443,6 +443,9 @@ const DEF_CATS = [
   {id:'cafe',name:'카페',icon:'☕',group:'기본'},
   {id:'medical',name:'의료',icon:'💊',group:'기본'},
   {id:'misc',name:'기타',icon:'💡',group:'기본'},
+  {id:'flight',name:'항공료',icon:'✈️',group:'기본'},
+  {id:'hotel',name:'호텔비',icon:'🏨',group:'기본'},
+  {id:'rental',name:'렌탈비',icon:'🚗',group:'기본'},
   {id:'golf_green',name:'그린피',icon:'⛳',group:'골프'},
   {id:'golf_caddie',name:'캐디피',icon:'🏌️',group:'골프'},
   {id:'golf_cart',name:'카트피',icon:'🛺',group:'골프'},
@@ -712,6 +715,10 @@ function openNewProject(){
       </div>
     </div>
     <div class="fgroup">
+      <label class="flabel">예산 시작일 <span style="font-weight:400;color:var(--text3);">(선택 · 사전예약 있을 때)</span></label>
+      <input class="finput" id="np-budget-start" type="date" style="font-size:16px;" placeholder="출발일 이전 결제가 있을 때만"/>
+    </div>
+    <div class="fgroup">
       <label class="flabel">동반자</label>
       ${db.friends.length?`<div class="chips" id="np-fchips" style="margin-bottom:9px;">
         ${db.friends.map(f=>`<button class="chip" data-v="${f}" onclick="this.classList.toggle('on');syncFriends()">${f}</button>`).join('')}
@@ -777,8 +784,10 @@ function saveNewProj(){
   const currency=document.getElementById('np-cur').value;
   const start=document.getElementById('np-start').value;
   const end=document.getElementById('np-end').value;
+  const budgetStart=document.getElementById('np-budget-start').value||'';
   npMembers.forEach(m=>{if(!db.friends.includes(m))db.friends.push(m);});
-  const proj={id:uid(),name,type,country,currency,flag,startDate:start,endDate:end,
+  const proj={id:uid(),name,type,country,currency,flag,
+    startDate:start,endDate:end,budgetStart,
     members:[...npMembers],days:{},createdAt:Date.now()};
   db.projects.unshift(proj);npMembers=[];save();closeSheet();openProj(proj.id);
 }
@@ -1028,21 +1037,28 @@ function openAddExp(expId){
       </div>
     </div>
     <div id="ae-sel-label" style="background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:8px;padding:7px 11px;margin-bottom:12px;font-size:12px;color:var(--accent2);display:none;"></div>
+    <div class="fgroup">
+      <label class="flabel">결제 통화</label>
+      <div class="chips" id="ae-cur">
+        ${isLocal?`<button class="chip${(!ex||ex.expCurrency===p.currency)?' on':''}" data-v="${p.currency}" onclick="pickChip(this,'ae-cur');toggleExpCurrency();">${p.currency} (현지)</button>`:''}
+        <button class="chip${(!isLocal||ex?.expCurrency==='KRW')?' on':''}" data-v="KRW" onclick="pickChip(this,'ae-cur');toggleExpCurrency();">KRW 원화</button>
+      </div>
+    </div>
     <div class="frow">
       <div class="fgroup">
         <label class="flabel" style="display:flex;align-items:center;justify-content:space-between;">
-          <span>금액${isLocal?` (${p.currency})`:' (₩)'}</span>
+          <span id="ae-amt-label">금액</span>
           <button type="button" onclick="openCalcFromExp()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:11px;padding:0;">🧮 계산기</button>
         </label>
         <input class="finput" id="ae-amt" type="text" inputmode="decimal" placeholder="0"
-          value="${ex?(isLocal?fmtComma(ex.amtLocal):fmtComma(ex.amtKRW))||'':''}"
+          value="${ex?(ex.expCurrency==='KRW'?fmtComma(ex.amtKRW):fmtComma(ex.amtLocal))||'':''}"
           style="font-size:16px;" oninput="fmtInputComma(this);updateKRWPrev()"/>
       </div>
-      ${isLocal?`<div class="fgroup">
+      <div class="fgroup" id="ae-rate-wrap" style="${(!isLocal||ex?.expCurrency==='KRW')?'display:none;':''}>
         <label class="flabel">환율 (1${p.currency}=₩) <span id="ae-spin" style="display:none;"><span class="spin"></span></span></label>
         <input class="finput" id="ae-rate" type="text" inputmode="decimal" placeholder="자동조회"
           value="${ex?fmtComma(ex.rate)||'':''}" style="font-size:16px;" oninput="fmtInputComma(this);updateKRWPrev()"/>
-      </div>`:''}
+      </div>
     </div>
     <div id="ae-prev" style="display:none;" class="krw-prev"></div>
     <div class="fgroup">
@@ -1070,9 +1086,29 @@ function openAddExp(expId){
       <button class="btn btn-p" style="flex:1;" onclick="saveExp('${expId||''}')">저장</button>
     </div>
   `);
-  if(isLocal&&!ex?.rate) fetchRate(p.currency,selDate);
+  const initCur=ex?ex.expCurrency||p.currency:p.currency;
+  if(initCur!=='KRW'&&!ex?.rate) fetchRate(p.currency,selDate);
   updateKRWPrev();
   updateSelLabel();
+}
+
+function toggleExpCurrency(){
+  const cur=getChip('ae-cur-chips');
+  const p=curProj; if(!p) return;
+  const isLocal=p.currency&&p.currency!=='KRW';
+  const rateWrap=document.getElementById('ae-rate-wrap');
+  const amtLabel=document.getElementById('ae-amt-label');
+  if(cur==='KRW'){
+    if(rateWrap) rateWrap.style.display='none';
+    if(amtLabel) amtLabel.textContent='금액 (₩)';
+  } else {
+    if(rateWrap) rateWrap.style.display='';
+    if(amtLabel) amtLabel.textContent=`금액 (${p.currency})`;
+    // 환율 자동조회
+    const rateInp=document.getElementById('ae-rate');
+    if(rateInp&&!rateInp.value) fetchRate(p.currency, selDate||todayStr());
+  }
+  updateKRWPrev();
 }
 
 function updateSelLabel(){
@@ -1085,18 +1121,38 @@ function updateSelLabel(){
   } else lbl.style.display='none';
 }
 
+function toggleExpCurrency(){
+  const p=curProj; if(!p) return;
+  const cur=getChip('ae-cur')||p.currency;
+  const isLocalCur=cur!=='KRW';
+  const rateWrap=document.getElementById('ae-rate-wrap');
+  const amtLabel=document.getElementById('ae-amt-label');
+  if(rateWrap) rateWrap.style.display=isLocalCur?'':'none';
+  if(amtLabel) amtLabel.textContent=`금액 (${cur})`;
+  if(isLocalCur && !document.getElementById('ae-rate')?.value){
+    fetchRate(p.currency, document.getElementById('ae-date')?.value||selDate||todayStr());
+  }
+  updateKRWPrev();
+}
+
 function updateKRWPrev(){
   updateSelLabel();
-  const p=curProj;
-  const isLocal=p&&p.currency&&p.currency!=='KRW';
-  if(!isLocal)return;
+  const p=curProj; if(!p) return;
+  const cur=getChip('ae-cur')||p.currency;
+  const isLocalCur=cur!=='KRW';
+  if(!isLocalCur){
+    // 원화 선택 시 preview 숨김
+    const prev=document.getElementById('ae-prev');
+    if(prev) prev.style.display='none';
+    return;
+  }
   const amt=parseFloat((document.getElementById('ae-amt')?.value||'').replace(/,/g,''))||0;
   const rate=parseFloat((document.getElementById('ae-rate')?.value||'').replace(/,/g,''))||0;
   const prev=document.getElementById('ae-prev');
   if(!prev)return;
   if(amt&&rate){
     prev.style.display='';
-    prev.textContent=`${fmtW(Math.round(amt*rate))}  (${fmtN(amt)} ${p.currency} × ${fmtN(rate)})`;
+    prev.textContent=`${fmtW(Math.round(amt*rate))}  (${fmtN(amt)} ${cur} × ${fmtN(rate)})`;
   } else prev.style.display='none';
 }
 
@@ -1124,13 +1180,16 @@ function saveExp(expId){
   if(!p){alert('프로젝트를 선택하세요.');return;}
   const catIds=[...document.querySelectorAll('#ae-cats .chip.on')].map(b=>b.dataset.v);
   if(!catIds.length){alert('항목을 하나 이상 선택하세요.');return;}
-  const isLocal=p.currency&&p.currency!=='KRW';
+  const expCurrency=getChip('ae-cur')||p.currency;
+  const isLocalCur=expCurrency!=='KRW';
   const amtRaw=(document.getElementById('ae-amt')?.value||'').replace(/,/g,'');
-  const amtLocal=parseFloat(amtRaw)||0;
-  if(!amtLocal){alert('금액을 입력하세요.');return;}
+  const amtInput=parseFloat(amtRaw)||0;
+  if(!amtInput){alert('금액을 입력하세요.');return;}
   const rateRaw=(document.getElementById('ae-rate')?.value||'').replace(/,/g,'');
-  const rate=isLocal?(parseFloat(rateRaw)||1):1;
-  const amtKRW=isLocal?Math.round(amtLocal*rate):amtLocal;
+  const rate=isLocalCur?(parseFloat(rateRaw)||1):1;
+  const amtLocal=isLocalCur?amtInput:0;
+  const amtKRW=isLocalCur?Math.round(amtInput*rate):amtInput;
+  const isLocal=isLocalCur;
   const shared=getChip('ae-shared')==='shared';
   const payType=getChip('ae-pay')||'card';
   const memo=document.getElementById('ae-memo')?.value.trim()||'';
@@ -1139,8 +1198,9 @@ function saveExp(expId){
   if(!targetDate){alert('날짜를 입력하세요.');return;}
   selDate=targetDate;
   if(!p.days[targetDate])p.days[targetDate]={expenses:[],diary:'',photo:null};
-  const rec={catId:catIds[0],catIds,amtLocal,amtKRW,currency:p.currency,
-    rate:isLocal?rate:null,shared,payType,memo,date:targetDate};
+  const rec={catId:catIds[0],catIds,amtLocal,amtKRW,
+    currency:p.currency,expCurrency,
+    rate:isLocalCur?rate:null,shared,payType,memo,date:targetDate};
   if(expId){
     Object.values(p.days).forEach(day=>{
       const idx=(day.expenses||[]).findIndex(e=>e.id===expId);
@@ -1382,10 +1442,19 @@ function calcSettle(){
   const n=members.length||1;
   const dns=['일','월','화','수','목','금','토'];
 
-  // 기간 내 날짜별 지출 수집
+  // 사전 결제 기준일 (budgetStart ~ startDate-1)
+  const tripStart=p.startDate||from;
+  const budgetStart=p.budgetStart||tripStart;
+
+  // 전체 기간 (예산시작일 ~ 종료일)
+  const effectiveFrom=from<budgetStart?from:(budgetStart<from?budgetStart:from);
   const dayEntries=Object.entries(p.days||{})
-    .filter(([d])=>d>=from&&d<=to)
+    .filter(([d])=>d>=effectiveFrom&&d<=to)
     .sort(([a],[b])=>a.localeCompare(b));
+
+  // 사전결제(출발전) / 현지지출 분리
+  const preTripEntries=dayEntries.filter(([d])=>d<tripStart);
+  const tripEntries=dayEntries.filter(([d])=>d>=tripStart);
 
   let all=[];
   dayEntries.forEach(([date,day])=>(day.expenses||[]).forEach(e=>all.push({...e,date})));
@@ -1395,8 +1464,8 @@ function calcSettle(){
   const personalTotal=grand-sharedTotal;
   const perPerson=n>1?Math.round(sharedTotal/n):0;
 
-  // 날짜별 상세 내역 HTML
-  const detailHTML=dayEntries.map(([date,day])=>{
+  // 날짜별 상세 내역 HTML (사전결제 / 현지 분리)
+  const makeDetailRows=(entries)=>entries.map(([date,day])=>{
     const exps=day.expenses||[];
     if(!exps.length)return'';
     const dt=new Date(date+'T00:00:00');
@@ -1433,6 +1502,9 @@ function calcSettle(){
     </div>`;
   }).join('');
 
+  const preTripHTML=makeDetailRows(preTripEntries);
+  const tripHTML=makeDetailRows(tripEntries);
+
   document.getElementById('settle-body-res').innerHTML=`
   <!-- 요약 -->
   <div class="card" style="margin-bottom:10px;">
@@ -1465,9 +1537,23 @@ function calcSettle(){
     </div>`).join('')}
   </div>`:''}
 
-  <!-- 날짜별 상세 내역 -->
-  <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;font-weight:700;padding:8px 0 10px;">상세 지출 내역</div>
-  ${detailHTML||`<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">이 기간에 지출 내역이 없습니다</div>`}`;
+  <!-- 사전 결제 섹션 -->
+  ${preTripHTML?`
+  <div style="display:flex;align-items:center;gap:8px;padding:8px 0 10px;">
+    <div style="font-size:10px;color:var(--amber);text-transform:uppercase;letter-spacing:.6px;font-weight:700;">✈ 사전 결제 (출발 전)</div>
+    <div style="flex:1;height:1px;background:var(--amber-border);"></div>
+  </div>
+  ${preTripHTML}`:''}
+
+  <!-- 현지 지출 섹션 -->
+  ${tripHTML?`
+  <div style="display:flex;align-items:center;gap:8px;padding:8px 0 10px;">
+    <div style="font-size:10px;color:var(--accent2);text-transform:uppercase;letter-spacing:.6px;font-weight:700;">🌍 현지 지출</div>
+    <div style="flex:1;height:1px;background:var(--accent-border);"></div>
+  </div>
+  ${tripHTML}`:''}
+
+  ${(!preTripHTML&&!tripHTML)?`<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px;">이 기간에 지출 내역이 없습니다</div>`:''}`;
 }
 
 
@@ -1692,11 +1778,36 @@ function _writePDFContent(doc,p,from,to,latinOnly){
   doc.text(latinOnly?'Expense Detail':'상세 지출 내역',M,y);y+=4;
   doc.setDrawColor(180);doc.line(M,y,W-M,y);y+=5;
 
-  const dayEntries=Object.entries(p.days||{})
+  const tripStart=p.startDate||from;
+  const allDayEntries=Object.entries(p.days||{})
     .filter(([d])=>d>=from&&d<=to&&(p.days[d].expenses||[]).length)
     .sort(([a],[b])=>a.localeCompare(b));
+  const preDayEntries=allDayEntries.filter(([d])=>d<tripStart);
+  const localDayEntries=allDayEntries.filter(([d])=>d>=tripStart);
+  const dayEntries=allDayEntries;
 
-  dayEntries.forEach(([date,day])=>{
+  // 사전결제 섹션
+  if(preDayEntries.length){
+    chk(8);
+    doc.setFontSize(9);doc.setFont(window._krFontBuf?'NanumGothic':'helvetica','normal');
+    doc.setTextColor(180,120,0);
+    doc.text(latinOnly?'[Pre-trip Payment]':'[사전 결제 - 출발 전]',M,y);y+=5;
+    doc.setTextColor(30,30,30);
+  }
+  preDayEntries.forEach(([date,day])=>{
+    _writePDFDay(doc,date,day,p,M,W,dns,KRW,chk,()=>y,(newY)=>y=newY);
+  });
+  if(preDayEntries.length&&localDayEntries.length){
+    chk(6);y+=3;
+    doc.setFontSize(9);doc.setTextColor(30,80,180);
+    doc.text(latinOnly?'[Local Expenses]':'[현지 지출]',M,y);y+=5;
+    doc.setTextColor(30,30,30);
+  }
+  localDayEntries.forEach(([date,day])=>{
+    _writePDFDay(doc,date,day,p,M,W,dns,KRW,chk,()=>y,(newY)=>y=newY);
+  });
+  // dummy - original loop replaced
+  if(false)[].forEach(([date,day])=>{
     chk(12);
     const dt=new Date(date+'T00:00:00');
     const dl=`${dt.getMonth()+1}/${dt.getDate()}(${dns[dt.getDay()]})`;
@@ -2269,6 +2380,9 @@ function _useCalcResult(){
 (function(){
   const toAdd=[
     {id:'golf_massage',name:'마사지',icon:'💆',group:'골프'},
+    {id:'flight',name:'항공료',icon:'✈️',group:'기본'},
+    {id:'hotel',name:'호텔비',icon:'🏨',group:'기본'},
+    {id:'rental',name:'렌탈비',icon:'🚗',group:'기본'},
   ];
   let changed=false;
   toAdd.forEach(item=>{
