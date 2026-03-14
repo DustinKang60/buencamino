@@ -343,6 +343,13 @@ body.light .badge-g{color:var(--green);}
     </div>
     <div id="month-list"></div>
   </div>
+  <nav class="nav">
+    <button class="nbtn" onclick="nav('home')"><span class="nicon">🏠</span>홈</button>
+    <button class="nbtn" onclick="nav('settle')"><span class="nicon">💰</span>정산</button>
+    <button class="nbtn" onclick="openCalc()"><span class="nicon">🧮</span>계산기</button>
+    <button class="nbtn" onclick="nav('stats')"><span class="nicon">📊</span>통계</button>
+    <button class="nbtn" onclick="nav('settings')"><span class="nicon">⚙️</span>설정</button>
+  </nav>
 </div>
 
 <!-- ════════════════ DETAIL ════════════════ -->
@@ -1330,7 +1337,42 @@ function delDiary(date){
 // ══════════════════════════════════
 // SETTLEMENT
 // ══════════════════════════════════
-function openSettle(){nav('settle');}  // 정산버튼은 settle 화면으로
+function openSettle(){
+  // 프로젝트 화면에서 호출 → 현재 프로젝트 그대로 정산
+  if(curProj){nav('settle');return;}
+  // 홈에서 호출 → 프로젝트 1개면 바로, 여러 개면 선택 시트
+  if(!db.projects.length){alert('여행 프로젝트가 없습니다.');return;}
+  if(db.projects.length===1){
+    curProj=db.projects[0];
+    nav('settle');
+    return;
+  }
+  // 여러 개 → 선택 시트
+  showSheet(`
+    <div class="s-handle"></div>
+    <div class="s-title">💰 정산할 여행 선택</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;">
+      ${db.projects.map(p=>{
+        const total=projTotal(p);
+        const days=Object.keys(p.days||{}).length;
+        return`<div class="card card-tap" onclick="curProj=db.projects.find(x=>x.id==='${p.id}');closeSheet();nav('settle');"
+          style="cursor:pointer;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-size:15px;font-weight:700;color:var(--text);">${p.flag||'🌍'} ${p.name}</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:3px;">${p.startDate||''}${p.endDate?' ~ '+p.endDate:''} · ${days}일</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:15px;font-weight:700;color:var(--text);">${fmtW(total)}</div>
+              <div style="font-size:10px;color:var(--accent);margin-top:2px;">선택 →</div>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    <button class="btn btn-g btn-full" onclick="closeSheet()">취소</button>
+  `);
+}
 
 function calcSettle(){
   const p=_getSettleProj();if(!p)return;
@@ -1444,10 +1486,11 @@ function renderSettle(){
     body.innerHTML=`<div class="empty"><div class="empty-ico">✈️</div><div class="empty-t">여행 프로젝트가 없습니다</div></div>`;
     return;
   }
-  // 프로젝트 선택 드롭다운 + 기간 선택
-  const projOpts=db.projects.map(p=>`<option value="${p.id}">${p.flag||'🌍'} ${p.name}</option>`).join('');
-  const firstProj=db.projects[0];
-  const dates=Object.keys(firstProj.days||{}).sort();
+  // 현재 보고 있던 프로젝트 우선 선택
+  const defaultProj = curProj || db.projects[0];
+  const projOpts=db.projects.map(p=>`<option value="${p.id}"${p.id===defaultProj.id?' selected':''}>` +
+    `${p.flag||'🌍'} ${p.name}</option>`).join('');
+  const dates=Object.keys(defaultProj.days||{}).sort();
   const minD=dates[0]||todayStr(), maxD=dates[dates.length-1]||todayStr();
   body.innerHTML=`
     <div class="card" style="margin-bottom:12px;">
