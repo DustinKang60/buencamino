@@ -234,6 +234,29 @@ body.light .badge-g{color:var(--green);}
 /* ── ANIM ── */
 .fade-up{animation:fu .2s ease both;}
 @keyframes fu{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── CALCULATOR ── */
+.calc-wrap{background:var(--surface2);border-radius:var(--radius);padding:14px;margin-bottom:12px;}
+.calc-display{background:var(--surface3);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px;text-align:right;}
+.calc-expr{font-size:12px;color:var(--text3);min-height:16px;word-break:break-all;}
+.calc-result{font-size:26px;font-weight:700;color:var(--text);margin-top:2px;}
+.calc-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+.cbtn{background:var(--surface3);border:none;border-radius:8px;padding:14px 0;
+  font-size:17px;font-weight:600;color:var(--text);cursor:pointer;font-family:var(--ff);transition:all .1s;}
+.cbtn:active{transform:scale(.93);background:var(--border2);}
+.cbtn.op{background:var(--accent-bg);color:var(--accent2);}
+.cbtn.eq{background:var(--accent);color:#fff;}
+.cbtn.clr{background:var(--red-bg);color:var(--red);}
+.cbtn.wide{grid-column:span 2;}
+
+/* ── SETTLE SCREEN ── */
+.settle-day-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);
+  margin-bottom:8px;overflow:hidden;}
+.settle-day-hdr{display:flex;justify-content:space-between;align-items:center;
+  padding:9px 12px;background:var(--surface2);border-bottom:1px solid var(--border);}
+.settle-row{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;
+  border-bottom:0.5px solid var(--border);}
+.settle-row:last-child{border-bottom:none;}
 </style>
 </head>
 <body>
@@ -265,11 +288,7 @@ body.light .badge-g{color:var(--green);}
       <div class="empty-s">＋ 버튼으로 새 프로젝트를 만드세요</div>
     </div>
   </div>
-  <nav class="nav">
-    <button class="nbtn on" onclick="nav('home')"><span class="nicon">🏠</span>홈</button>
-    <button class="nbtn" onclick="nav('stats')"><span class="nicon">📊</span>통계</button>
-    <button class="nbtn" onclick="nav('settings')"><span class="nicon">⚙️</span>설정</button>
-  </nav>
+<nav class="nav"><button class="nbtn on" onclick="nav('home')"><span class="nicon">🏠</span>홈</button><button class="nbtn" onclick="nav('settle')"><span class="nicon">💰</span>정산</button><button class="nbtn" onclick="openCalc()"><span class="nicon">🧮</span>계산기</button><button class="nbtn" onclick="nav('stats')"><span class="nicon">📊</span>통계</button><button class="nbtn" onclick="nav('settings')"><span class="nicon">⚙️</span>설정</button></nav>
 </div>
 
 <!-- ════════════════ PROJECT ════════════════ -->
@@ -348,11 +367,7 @@ body.light .badge-g{color:var(--green);}
     </div>
   </div>
   <div class="scroll" style="padding:14px;" id="stats-body"></div>
-  <nav class="nav">
-    <button class="nbtn" onclick="nav('home')"><span class="nicon">🏠</span>홈</button>
-    <button class="nbtn on" onclick="nav('stats')"><span class="nicon">📊</span>통계</button>
-    <button class="nbtn" onclick="nav('settings')"><span class="nicon">⚙️</span>설정</button>
-  </nav>
+<nav class="nav"><button class="nbtn" onclick="nav('home')"><span class="nicon">🏠</span>홈</button><button class="nbtn" onclick="nav('settle')"><span class="nicon">💰</span>정산</button><button class="nbtn" onclick="openCalc()"><span class="nicon">🧮</span>계산기</button><button class="nbtn on" onclick="nav('stats')"><span class="nicon">📊</span>통계</button><button class="nbtn" onclick="nav('settings')"><span class="nicon">⚙️</span>설정</button></nav>
 </div>
 
 <!-- ════════════════ SETTINGS ════════════════ -->
@@ -362,11 +377,7 @@ body.light .badge-g{color:var(--green);}
     <div class="tb-group right"></div>
   </div>
   <div class="scroll" style="padding:14px;" id="settings-body"></div>
-  <nav class="nav">
-    <button class="nbtn" onclick="nav('home')"><span class="nicon">🏠</span>홈</button>
-    <button class="nbtn" onclick="nav('stats')"><span class="nicon">📊</span>통계</button>
-    <button class="nbtn on" onclick="nav('settings')"><span class="nicon">⚙️</span>설정</button>
-  </nav>
+<nav class="nav"><button class="nbtn" onclick="nav('home')"><span class="nicon">🏠</span>홈</button><button class="nbtn" onclick="nav('settle')"><span class="nicon">💰</span>정산</button><button class="nbtn" onclick="openCalc()"><span class="nicon">🧮</span>계산기</button><button class="nbtn" onclick="nav('stats')"><span class="nicon">📊</span>통계</button><button class="nbtn on" onclick="nav('settings')"><span class="nicon">⚙️</span>설정</button></nav>
 </div>
 
 <!-- ════════════════ CATEGORIES ════════════════ -->
@@ -381,6 +392,19 @@ body.light .badge-g{color:var(--green);}
     </div>
   </div>
   <div class="scroll" style="padding:14px;" id="cats-body"></div>
+</div>
+
+<!-- ════════════════ SETTLE ════════════════ -->
+<div class="screen" id="sc-settle">
+  <div class="topbar">
+    <div class="tb-group"><span class="tb-title">💰 정산</span></div>
+    <div class="tb-group right">
+      <button class="ibtn" onclick="exportSettlePDF()" title="PDF 저장">📄</button>
+      <button class="ibtn" onclick="shareSettle()" title="카톡 공유">📤</button>
+    </div>
+  </div>
+  <div class="scroll" style="padding:14px;" id="settle-body"></div>
+  <nav class="nav" id="settle-nav"></nav>
 </div>
 
 <!-- OVERLAY -->
@@ -416,6 +440,7 @@ const DEF_CATS = [
   {id:'golf_cart',name:'카트피',icon:'🛺',group:'골프'},
   {id:'golf_insurance',name:'골프보험',icon:'🛡️',group:'골프'},
   {id:'golf_food',name:'클럽하우스 식비',icon:'🍱',group:'골프'},
+  {id:'golf_massage',name:'마사지',icon:'💆',group:'골프'},
 ];
 
 let db;
@@ -484,6 +509,7 @@ function nav(sc){
   if(sc==='stats')renderStats();
   if(sc==='settings')renderSettings();
   if(sc==='cats')renderCats();
+  if(sc==='settle')renderSettle();
 }
 function openProj(id){
   curProj=db.projects.find(p=>p.id===id);
@@ -870,7 +896,12 @@ function renderDayPanel(){
         <div class="li-title">${names}</div>
         <div style="margin-top:3px;"><span class="badge ${e.shared?'badge-a':'badge-b'}">${e.shared?'👥 공통':'👤 개인'}</span></div>
       </div>
-      <div class="li-r"><div class="li-amt">${fmtW(e.amtKRW||0)}</div></div>
+      <div class="li-r">
+        ${e.amtLocal&&e.currency&&e.currency!=='KRW'?
+          `<div style="font-size:13px;font-weight:700;color:var(--text);">${fmtLocal2(e.amtLocal,e.currency)}</div>
+           <div style="font-size:11px;color:var(--text3);">(${fmtW(e.amtKRW||0)})</div>`:
+          `<div class="li-amt">${fmtW(e.amtKRW||0)}</div>`}
+      </div>
       <span class="li-arr">›</span>
     </div>`;
   });
@@ -911,7 +942,12 @@ function renderMonthList(){
             <div class="li-title">${names}</div>
             <div style="margin-top:2px;"><span class="badge ${e.shared?'badge-a':'badge-b'}">${e.shared?'공통':'개인'}</span></div>
           </div>
-          <div class="li-r"><div class="li-amt">${fmtW(e.amtKRW||0)}</div></div>
+          <div class="li-r">
+            ${e.amtLocal&&e.currency&&e.currency!=='KRW'?
+              `<div style="font-size:12px;font-weight:700;color:var(--text);">${fmtLocal2(e.amtLocal,e.currency)}</div>
+               <div style="font-size:10px;color:var(--text3);">(${fmtW(e.amtKRW||0)})</div>`:
+              `<div class="li-amt">${fmtW(e.amtKRW||0)}</div>`}
+          </div>
           <span class="li-arr">›</span>
         </div>`;
       }).join('')}
@@ -1030,8 +1066,8 @@ function updateKRWPrev(){
   updateSelLabel();
   const p=curProj; const isLocal=p&&p.currency&&p.currency!=='KRW';
   if(!isLocal)return;
-  const amt=parseFloat(document.getElementById('ae-amt')?.value)||0;
-  const rate=parseFloat(document.getElementById('ae-rate')?.value)||0;
+  const amt=parseFloat((document.getElementById('ae-amt')?.value||'').replace(/,/g,''))||0;
+  const rate=parseFloat((document.getElementById('ae-rate')?.value||'').replace(/,/g,''))||0;
   const prev=document.getElementById('ae-prev');
   if(!prev)return;
   if(amt&&rate){
@@ -1061,25 +1097,38 @@ function setRate(v){
 
 function saveExp(expId){
   const p=curProj;
-  if(!p||!selDate){alert('날짜를 선택하세요.');return;}
-  const catIds=[...document.querySelectorAll('#ae-cats .chip.on')].map(c=>c.dataset.v);
+  if(!p){alert('프로젝트를 선택하세요.');return;}
+  const catIds=[...document.querySelectorAll('#ae-cats .chip.on')].map(btn=>btn.dataset.v);
   if(!catIds.length){alert('항목을 하나 이상 선택하세요.');return;}
   const isLocal=p.currency&&p.currency!=='KRW';
-  const amtLocal=parseFloat(document.getElementById('ae-amt')?.value)||0;
+  const amtRaw=(document.getElementById('ae-amt')?.value||'').replace(/,/g,'');
+  const amtLocal=parseFloat(amtRaw)||0;
   if(!amtLocal){alert('금액을 입력하세요.');return;}
-  const rate=isLocal?(parseFloat(document.getElementById('ae-rate')?.value)||1):1;
+  const rateRaw=(document.getElementById('ae-rate')?.value||'').replace(/,/g,'');
+  const rate=isLocal?(parseFloat(rateRaw)||1):1;
   const amtKRW=isLocal?Math.round(amtLocal*rate):amtLocal;
   const shared=getChip('ae-shared')==='shared';
+  const payType=getChip('ae-pay')||'card';
   const memo=document.getElementById('ae-memo')?.value.trim()||'';
+  // 날짜: 입력창 값 우선
+  const dateInput=document.getElementById('ae-date');
+  const targetDate=dateInput?dateInput.value:selDate;
+  if(!targetDate){alert('날짜를 입력하세요.');return;}
+  selDate=targetDate;
 
-  if(!p.days[selDate])p.days[selDate]={expenses:[],diary:'',photo:null};
-  const rec={catId:catIds[0],catIds,amtLocal,amtKRW,currency:p.currency,rate:isLocal?rate:null,shared,memo,date:selDate};
+  if(!p.days[targetDate])p.days[targetDate]={expenses:[],diary:'',photo:null};
+  const rec={catId:catIds[0],catIds,amtLocal,amtKRW,currency:p.currency,
+    rate:isLocal?rate:null,shared,payType,memo,date:targetDate};
 
   if(expId){
-    const idx=(p.days[selDate].expenses||[]).findIndex(e=>e.id===expId);
-    if(idx>=0)p.days[selDate].expenses[idx]={...p.days[selDate].expenses[idx],...rec};
+    // 날짜가 바뀌었을 수 있으니 원본 날짜에서 찾아서 삭제 후 새 날짜에 추가
+    let found=false;
+    Object.values(p.days).forEach(day=>{
+      const idx=(day.expenses||[]).findIndex(e=>e.id===expId);
+      if(idx>=0){day.expenses[idx]={...day.expenses[idx],...rec};found=true;}
+    });
   } else {
-    p.days[selDate].expenses.push({id:uid(),...rec,createdAt:Date.now()});
+    p.days[targetDate].expenses.push({id:uid(),...rec,createdAt:Date.now()});
   }
   save();closeSheet();renderProjSummary();renderCal();renderDayPanel();renderMonthList();
 }
@@ -1108,6 +1157,7 @@ function openExpDetail(date,expId){
     </div>
     <div class="card">
       <div class="row"><span class="rl">항목</span><span class="rr" style="text-align:right;max-width:60%;">${names}</span></div>
+      <div class="row"><span class="rl">결제</span><span class="rr">${ex.payType==='cash'?'💵 현금':'💳 카드'}</span></div>
       <div class="row"><span class="rl">구분</span><span class="rr"><span class="badge ${ex.shared?'badge-a':'badge-b'}">${ex.shared?'👥 공통':'👤 개인'}</span></span></div>
       ${ex.memo?`<div class="row"><span class="rl">메모</span><span class="rr">${esc(ex.memo)}</span></div>`:''}
     </div>`;
@@ -1235,30 +1285,10 @@ function delDiary(date){
 // ══════════════════════════════════
 // SETTLEMENT
 // ══════════════════════════════════
-function openSettle(){
-  const p=curProj;if(!p)return;
-  const dates=Object.keys(p.days||{}).sort();
-  const minD=dates[0]||todayStr(), maxD=dates[dates.length-1]||todayStr();
-  showSheet(`
-    <div class="s-handle"></div>
-    <div class="s-title">💰 정산</div>
-    <div class="frow" style="margin-bottom:14px;">
-      <div class="fgroup" style="margin-bottom:0;"><label class="flabel">시작일</label>
-        <input class="finput" id="st-from" type="date" value="${minD}" style="font-size:16px;" onchange="calcSettle()"/></div>
-      <div class="fgroup" style="margin-bottom:0;"><label class="flabel">종료일</label>
-        <input class="finput" id="st-to" type="date" value="${maxD}" style="font-size:16px;" onchange="calcSettle()"/></div>
-    </div>
-    <div id="settle-res"></div>
-    <div class="s-actions">
-      <button class="btn btn-g" style="flex:1;" onclick="closeSheet()">닫기</button>
-      <button class="btn btn-p" style="flex:1;" onclick="shareSettle()">📤 카톡 공유</button>
-    </div>
-  `);
-  calcSettle();
-}
+function openSettle(){nav('settle');}  // 정산버튼은 settle 화면으로
 
 function calcSettle(){
-  const p=curProj;if(!p)return;
+  const p=_getSettleProj();if(!p)return;
   const from=document.getElementById('st-from')?.value||'';
   const to=document.getElementById('st-to')?.value||'';
   const members=['나',...(p.members||[])];
@@ -1281,7 +1311,7 @@ function calcSettle(){
       return`<div class="row"><span class="rl">${dt.getMonth()+1}/${dt.getDate()}</span><span class="rr">${fmtW(tot)}</span></div>`;
     }).join('');
 
-  document.getElementById('settle-res').innerHTML=`
+  document.getElementById('settle-body-res').innerHTML=`
   <div class="card" style="margin-bottom:8px;">
     <div class="row"><span class="rl">기간 총 지출</span><span style="font-size:15px;font-weight:700;color:var(--text);">${fmtW(grand)}</span></div>
     <div class="row"><span class="rl">개인 지출</span><span class="rr" style="color:var(--accent2);">${fmtW(personalTotal)}</span></div>
@@ -1300,8 +1330,148 @@ function calcSettle(){
   ${dayRows?`<div class="card"><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:6px;">일별 내역</div>${dayRows}</div>`:''}`;
 }
 
+// ══════════════════════════════════
+// SETTLE SCREEN
+// ══════════════════════════════════
+function renderSettle(){
+  const navEl=document.getElementById('settle-nav');
+  if(navEl){
+    const btns=[['home','🏠','홈'],['settle','💰','정산'],['calc','🧮','계산기'],['stats','📊','통계'],['settings','⚙️','설정']];
+    navEl.innerHTML=btns.map(([k,i,l])=>k==='calc'?`<button class="nbtn" onclick="openCalc()"><span class="nicon">${i}</span>${l}</button>`:`<button class="nbtn${k==='settle'?' on':''}" onclick="nav('${k}')"><span class="nicon">${i}</span>${l}</button>`).join('');
+  }
+  // 프로젝트가 없으면 선택 유도
+  const body=document.getElementById('settle-body');
+  if(!db.projects.length){
+    body.innerHTML=`<div class="empty"><div class="empty-ico">✈️</div><div class="empty-t">여행 프로젝트가 없습니다</div></div>`;
+    return;
+  }
+  // 프로젝트 선택 드롭다운 + 기간 선택
+  const projOpts=db.projects.map(p=>`<option value="${p.id}">${p.flag||'🌍'} ${p.name}</option>`).join('');
+  const firstProj=db.projects[0];
+  const dates=Object.keys(firstProj.days||{}).sort();
+  const minD=dates[0]||todayStr(), maxD=dates[dates.length-1]||todayStr();
+  body.innerHTML=`
+    <div class="card" style="margin-bottom:12px;">
+      <div class="fgroup" style="margin-bottom:12px;">
+        <label class="flabel">여행 프로젝트</label>
+        <select class="finput" id="st-proj" style="font-size:15px;" onchange="onSettleProjChange()">
+          ${projOpts}
+        </select>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <div style="flex:1;"><label class="flabel">시작일</label>
+          <input class="finput" id="st-from" type="date" value="${minD}" style="font-size:15px;" onchange="calcSettle()"/></div>
+        <div style="flex:1;"><label class="flabel">종료일</label>
+          <input class="finput" id="st-to" type="date" value="${maxD}" style="font-size:15px;" onchange="calcSettle()"/></div>
+      </div>
+    </div>
+    <div id="settle-body-res"></div>`;
+  calcSettle();
+}
+
+function onSettleProjChange(){
+  const pid=document.getElementById('st-proj')?.value;
+  const p=db.projects.find(x=>x.id===pid);
+  if(!p)return;
+  const dates=Object.keys(p.days||{}).sort();
+  if(dates.length){
+    document.getElementById('st-from').value=dates[0];
+    document.getElementById('st-to').value=dates[dates.length-1];
+  }
+  calcSettle();
+}
+
+function _getSettleProj(){
+  const pid=document.getElementById('st-proj')?.value;
+  return pid?db.projects.find(x=>x.id===pid):(curProj||db.projects[0]);
+}
+
+function exportSettlePDF(){
+  // jsPDF 로드 후 PDF 생성
+  if(!window.jspdf){
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload=()=>_buildPDF();
+    document.head.appendChild(s);
+  } else _buildPDF();
+}
+
+function _buildPDF(){
+  const p=_getSettleProj(); if(!p)return;
+  const from=document.getElementById('st-from')?.value||'';
+  const to=document.getElementById('st-to')?.value||'';
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  const W=210,margin=15;let y=20;
+
+  // Title
+  doc.setFontSize(18);doc.setFont('helvetica','bold');
+  doc.text('Buen Camino - Travel Report',margin,y);y+=8;
+  doc.setFontSize(11);doc.setFont('helvetica','normal');
+  doc.text(`${p.name}  ${from} ~ ${to}`,margin,y);y+=6;
+  doc.text(`Currency: ${p.currency}  Members: ${['나',...(p.members||[])].join(', ')}`,margin,y);y+=8;
+  doc.setDrawColor(180);doc.line(margin,y,W-margin,y);y+=6;
+
+  // Collect expenses
+  let all=[];
+  Object.entries(p.days||{}).forEach(([date,day])=>{
+    if(date>=from&&date<=to)(day.expenses||[]).forEach(e=>all.push({...e,date}));
+  });
+  const grand=all.reduce((s,e)=>s+(e.amtKRW||0),0);
+  const sharedTotal=all.filter(e=>e.shared).reduce((s,e)=>s+(e.amtKRW||0),0);
+  const members=['나',...(p.members||[])];
+  const perPerson=members.length>1?Math.round(sharedTotal/members.length):0;
+
+  // Day-by-day
+  const byDate={};
+  all.forEach(e=>{if(!byDate[e.date])byDate[e.date]=[];byDate[e.date].push(e);});
+  const dns=['일','월','화','수','목','금','토'];
+
+  Object.keys(byDate).sort().forEach(date=>{
+    if(y>265){doc.addPage();y=20;}
+    const dt=new Date(date+'T00:00:00');
+    const dl=`${dt.getMonth()+1}/${dt.getDate()}(${dns[dt.getDay()]})`;
+    const dayTotal=byDate[date].reduce((s,e)=>s+(e.amtKRW||0),0);
+    doc.setFontSize(10);doc.setFont('helvetica','bold');
+    doc.text(dl,margin,y);
+    doc.text('KRW '+dayTotal.toLocaleString(),W-margin,y,{align:'right'});
+    y+=5;
+    byDate[date].forEach(e=>{
+      if(y>270){doc.addPage();y=20;}
+      const cats=(e.catIds||[e.catId]).map(id=>{const cat=db.cats.find(c=>c.id===id);return cat?cat.name:'';}).filter(Boolean).join('+');
+      const amtStr=e.amtLocal&&e.currency!=='KRW'?`${e.currency} ${Math.round(e.amtLocal).toLocaleString()} (KRW ${(e.amtKRW||0).toLocaleString()})`:
+        'KRW '+(e.amtKRW||0).toLocaleString();
+      doc.setFontSize(9);doc.setFont('helvetica','normal');
+      const payLabel=e.payType==='cash'?'현금':'카드';
+      const shLabel=e.shared?'공통':'개인';
+      doc.text(`  ${cats}  [${shLabel}/${payLabel}]${e.memo?' · '+e.memo:''}`,margin+2,y);
+      doc.text(amtStr,W-margin,y,{align:'right'});
+      y+=4.5;
+    });
+    doc.setDrawColor(220);doc.line(margin,y,W-margin,y);y+=3;
+  });
+
+  // Summary
+  if(y>240){doc.addPage();y=20;}
+  y+=4;
+  doc.setFontSize(11);doc.setFont('helvetica','bold');
+  doc.text('Summary',margin,y);y+=6;
+  doc.setFontSize(10);doc.setFont('helvetica','normal');
+  doc.text(`Total: KRW ${grand.toLocaleString()}`,margin,y);y+=5;
+  doc.text(`Shared: KRW ${sharedTotal.toLocaleString()}`,margin,y);y+=5;
+  if(members.length>1){
+    doc.text(`Per person: KRW ${perPerson.toLocaleString()} (${members.length} people)`,margin,y);y+=5;
+    members.forEach(m=>{
+      doc.text(`  ${m}: KRW ${perPerson.toLocaleString()}`,margin,y);y+=4.5;
+    });
+  }
+
+  const fname=`BuenCamino_${p.name}_${from}_${to}.pdf`.replace(/\s/g,'_');
+  doc.save(fname);
+}
+
 function shareSettle(){
-  const p=curProj;if(!p)return;
+  const p=_getSettleProj();if(!p)return;
   const from=document.getElementById('st-from')?.value||'';
   const to=document.getElementById('st-to')?.value||'';
   const members=['나',...(p.members||[])];
@@ -1546,13 +1716,111 @@ function todayStr(){const d=new Date();return`${d.getFullYear()}-${pad(d.getMont
 function pad(n){return String(n).padStart(2,'0');}
 function fmtW(n){return'₩'+Math.round(n).toLocaleString();}
 function fmtN(n){if(!n&&n!==0)return'';return(Math.round(n*100)/100).toLocaleString();}
+function fmtComma(n){if(!n&&n!==0)return'';return Number(n).toLocaleString();}
+function fmtLocal2(amt,cur){if(!amt)return'';const sym={JPY:'¥',USD:'$',PHP:'₱',THB:'฿',VND:'₫',EUR:'€',GBP:'£',HKD:'HK$',SGD:'S$',TWD:'NT$',MYR:'RM',IDR:'Rp',CNY:'¥',AUD:'A$',CAD:'C$',CHF:'Fr'};return(sym[cur]||cur)+Math.round(amt).toLocaleString();}
+function fmtInputComma(inp){const raw=inp.value.replace(/,/g,'');const n=parseFloat(raw);if(!isNaN(n)&&raw!==''){const pos=inp.selectionStart;const oldLen=inp.value.length;inp.value=n.toLocaleString();const newLen=inp.value.length;inp.setSelectionRange(pos+(newLen-oldLen),pos+(newLen-oldLen));}
+}
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ── 계산기 ──
+let _calcExpr='',_calcFromExp=false;
+function openCalc(){_calcFromExp=false;_showCalc();}
+function openCalcFromExp(){_calcFromExp=true;_showCalc();}
+function _showCalc(){
+  const fromExpBtn=_calcFromExp?`<button class="btn btn-p btn-full" onclick="_useCalcResult()" style="margin-top:8px;">금액으로 가져오기</button>`:'';
+  showSheet(`
+    <div class="s-handle"></div>
+    <div class="s-title">🧮 계산기</div>
+    <div class="calc-wrap">
+      <div class="calc-display">
+        <div class="calc-expr" id="calc-expr"></div>
+        <div class="calc-result" id="calc-res">0</div>
+      </div>
+      <div class="calc-grid">
+        <button class="cbtn clr" onclick="calcAC()">AC</button>
+        <button class="cbtn op" onclick="calcOp('±')">±</button>
+        <button class="cbtn op" onclick="calcOp('%')">%</button>
+        <button class="cbtn op" onclick="calcOp('÷')">÷</button>
+        <button class="cbtn" onclick="calcNum('7')">7</button>
+        <button class="cbtn" onclick="calcNum('8')">8</button>
+        <button class="cbtn" onclick="calcNum('9')">9</button>
+        <button class="cbtn op" onclick="calcOp('×')">×</button>
+        <button class="cbtn" onclick="calcNum('4')">4</button>
+        <button class="cbtn" onclick="calcNum('5')">5</button>
+        <button class="cbtn" onclick="calcNum('6')">6</button>
+        <button class="cbtn op" onclick="calcOp('−')">−</button>
+        <button class="cbtn" onclick="calcNum('1')">1</button>
+        <button class="cbtn" onclick="calcNum('2')">2</button>
+        <button class="cbtn" onclick="calcNum('3')">3</button>
+        <button class="cbtn op" onclick="calcOp('+')">+</button>
+        <button class="cbtn wide" onclick="calcNum('0')">0</button>
+        <button class="cbtn" onclick="calcDot()">.</button>
+        <button class="cbtn eq" onclick="calcEq()">=</button>
+      </div>
+    </div>
+    ${fromExpBtn}
+  `);
+  _calcExpr='';_calcRender();
+}
+let _calcCur='0',_calcOp='',_calcPrev=0,_calcNewNum=true;
+function _calcRender(){
+  const expr=document.getElementById('calc-expr');
+  const res=document.getElementById('calc-res');
+  if(expr)expr.textContent=_calcExpr;
+  if(res)res.textContent=parseFloat(_calcCur).toLocaleString();
+}
+function calcNum(n){
+  if(_calcNewNum){_calcCur=n;_calcNewNum=false;}
+  else _calcCur=(_calcCur==='0'?n:_calcCur+n);
+  _calcRender();
+}
+function calcDot(){
+  if(_calcNewNum){_calcCur='0.';_calcNewNum=false;}
+  else if(!_calcCur.includes('.'))_calcCur+='.';
+  _calcRender();
+}
+function calcOp(op){
+  if(op==='±'){_calcCur=String(-parseFloat(_calcCur));_calcRender();return;}
+  if(op==='%'){_calcCur=String(parseFloat(_calcCur)/100);_calcRender();return;}
+  calcEq();
+  _calcOp=op;_calcPrev=parseFloat(_calcCur);_calcNewNum=true;
+  _calcExpr=parseFloat(_calcCur).toLocaleString()+' '+op;
+  _calcRender();
+}
+function calcEq(){
+  if(!_calcOp)return;
+  const a=_calcPrev,b=parseFloat(_calcCur);
+  let r=a;
+  if(_calcOp==='+'||_calcOp==='+')r=a+b;
+  else if(_calcOp==='−')r=a-b;
+  else if(_calcOp==='×')r=a*b;
+  else if(_calcOp==='÷')r=b!==0?a/b:0;
+  _calcExpr+=_calcCur+' =';
+  _calcCur=String(Math.round(r*1e8)/1e8);
+  _calcOp='';_calcNewNum=true;_calcRender();
+}
+function calcAC(){_calcCur='0';_calcOp='';_calcPrev=0;_calcNewNum=true;_calcExpr='';_calcRender();}
+function _useCalcResult(){
+  const val=parseFloat(_calcCur);
+  const inp=document.getElementById('ae-amt');
+  if(inp){inp.value=val.toLocaleString();updateKRWPrev();}
+  closeSheet();
+  // Reopen expense sheet - need to keep state
+  // Simpler: just close and user sees value was applied
+}
 
 // ══════════════════════════════════
 // INIT
 // ══════════════════════════════════
 renderHome();
-// Push initial history state so Android back button stays in-app
+// Render settle nav on load
+(function(){
+  const navEl=document.getElementById('settle-nav');
+  if(navEl){
+    const btns=[['home','🏠','홈'],['settle','💰','정산'],['calc','🧮','계산기'],['stats','📊','통계'],['settings','⚙️','설정']];
+    navEl.innerHTML=btns.map(([k,i,l])=>k==='calc'?`<button class="nbtn" onclick="openCalc()"><span class="nicon">${i}</span>${l}</button>`:`<button class="nbtn${k==='settle'?' on':''}" onclick="nav('${k}')"><span class="nicon">${i}</span>${l}</button>`).join('');
+  }
+})();
 history.replaceState({sc:'home'}, '', location.href.split('#')[0]+'#home');
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 </script>
