@@ -1,8 +1,8 @@
 const CACHE = 'buencamino-v1';
 const ASSETS = [
-  '/buen-camino-v3/',
-  '/buen-camino-v3/index.html',
-  '/buen-camino-v3/manifest.json',
+  '/buencamino/',
+  '/buencamino/index.html',
+  '/buencamino/manifest.json',
 ];
 
 self.addEventListener('install', e => {
