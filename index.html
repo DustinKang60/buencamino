@@ -1786,28 +1786,9 @@ function _writePDFContent(doc,p,from,to,latinOnly){
   const localDayEntries=allDayEntries.filter(([d])=>d>=tripStart);
   const dayEntries=allDayEntries;
 
-  // 사전결제 섹션
-  if(preDayEntries.length){
-    chk(8);
-    doc.setFontSize(9);doc.setFont(window._krFontBuf?'NanumGothic':'helvetica','normal');
-    doc.setTextColor(180,120,0);
-    doc.text(latinOnly?'[Pre-trip Payment]':'[사전 결제 - 출발 전]',M,y);y+=5;
-    doc.setTextColor(30,30,30);
-  }
-  preDayEntries.forEach(([date,day])=>{
-    _writePDFDay(doc,date,day,p,M,W,dns,KRW,chk,()=>y,(newY)=>y=newY);
-  });
-  if(preDayEntries.length&&localDayEntries.length){
-    chk(6);y+=3;
-    doc.setFontSize(9);doc.setTextColor(30,80,180);
-    doc.text(latinOnly?'[Local Expenses]':'[현지 지출]',M,y);y+=5;
-    doc.setTextColor(30,30,30);
-  }
-  localDayEntries.forEach(([date,day])=>{
-    _writePDFDay(doc,date,day,p,M,W,dns,KRW,chk,()=>y,(newY)=>y=newY);
-  });
-  // dummy - original loop replaced
-  if(false)[].forEach(([date,day])=>{
+  // 날짜별 렌더 함수 (인라인)
+  const writePDFDays=(entries)=>{
+    entries.forEach(([date,day])=>{
     chk(12);
     const dt=new Date(date+'T00:00:00');
     const dl=`${dt.getMonth()+1}/${dt.getDate()}(${dns[dt.getDay()]})`;
@@ -1874,6 +1855,31 @@ function _writePDFContent(doc,p,from,to,latinOnly){
 
     doc.setDrawColor(210);doc.line(M,y-1,W-M,y-1);y+=2;
   });
+  };  // end writePDFDays
+
+  // 사전결제 섹션
+  if(preDayEntries.length){
+    chk(8);
+    doc.setFontSize(9);
+    doc.setFont(window._krFontBuf?'NanumGothic':'helvetica','normal');
+    doc.setTextColor(180,120,0);
+    doc.text(latinOnly?'[Pre-trip Payment]':'[사전 결제 - 출발 전]',M,y);y+=5;
+    doc.setTextColor(30,30,30);
+    writePDFDays(preDayEntries);
+  }
+  // 현지 지출 섹션
+  if(localDayEntries.length){
+    if(preDayEntries.length){chk(6);y+=2;}
+    doc.setFontSize(9);
+    doc.setFont(window._krFontBuf?'NanumGothic':'helvetica','normal');
+    doc.setTextColor(30,80,180);
+    doc.text(latinOnly?'[Local Expenses]':'[현지 지출]',M,y);y+=5;
+    doc.setTextColor(30,30,30);
+    writePDFDays(localDayEntries);
+  }
+  if(!preDayEntries.length&&!localDayEntries.length){
+    writePDFDays(dayEntries);
+  }
 
   // 푸터
   chk(8);
