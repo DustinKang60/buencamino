@@ -2004,8 +2004,7 @@ function _writePDFContent(doc,p,from,to,latinOnly){
     const dayExps=day.expenses||[];
     const dayTotal=dayExps.reduce((s,e)=>s+(e.amtKRW||0),0);
 
-    // 날짜 헤더: 원화 합계 + (현지통화 합계 @환율) 표시
-    // 현지 통화별로 분리 집계 (같은 날 여러 통화 혼용 가능)
+    // 날짜 헤더: 날짜(좌) / 원화합계(우) 첫째줄, 현지통화+환율(우) 둘째줄
     const isLocal=p.currency&&p.currency!=='KRW';
     const sym={JPY:'¥',USD:'$',PHP:'₱',THB:'฿',VND:'₫',EUR:'€',GBP:'£',HKD:'HK$',SGD:'S$',TWD:'NT$',MYR:'RM',IDR:'Rp',CNY:'¥',AUD:'A$',CAD:'C$',CHF:'Fr'};
 
@@ -2018,24 +2017,31 @@ function _writePDFContent(doc,p,from,to,latinOnly){
         if(e.rate){localSummary[e.currency].rateSum+=e.rate;localSummary[e.currency].rateCount++;}
       }
     });
+    // "₱21,900  @25" 형태의 문자열 배열
     const localLines=Object.entries(localSummary).map(([cur,v])=>{
       const avgRate=v.rateCount>0?Math.round(v.rateSum/v.rateCount):0;
       const s=sym[cur]||cur;
-      return avgRate?`${s}${Math.round(v.total).toLocaleString()}  @${avgRate.toLocaleString()}`:
-                     `${s}${Math.round(v.total).toLocaleString()}`;
+      return avgRate
+        ?`${s}${Math.round(v.total).toLocaleString()}  @${avgRate.toLocaleString()}`
+        :`${s}${Math.round(v.total).toLocaleString()}`;
     });
 
     const hasLocal=localLines.length>0;
-    const hdrH=hasLocal?(6+localLines.length*4.5):6;
+    // 헤더 높이: 첫줄(날짜/원화) + 현지통화 줄 수
+    const hdrH=hasLocal?(7+localLines.length*4.5):6;
     doc.setFillColor(235,240,250);
     doc.rect(M,y-3.5,RW,hdrH,'F');
+
+    // 첫 줄: 날짜(좌) + 원화합계(우)
     doc.setFontSize(9);doc.setTextColor(15,21,40);
     doc.text(dl,M+2,y);
     doc.text(KRW(dayTotal),W-M,y,{align:'right'});
+
+    // 둘째 줄~: 현지통화합계 @환율 (우측 정렬, 파란색)
     if(hasLocal){
       doc.setFontSize(7.5);doc.setTextColor(60,60,180);
       localLines.forEach((line,i)=>{
-        doc.text(line,M+2,y+4.5*(i+1));
+        doc.text(line,W-M,y+4.5*(i+1),{align:'right'});
       });
       doc.setTextColor(30,30,30);
       y+=hdrH+2;
@@ -2122,7 +2128,6 @@ function shareSettle(){
   const personalTotal=grand-sharedTotal;
   const perPerson=n>1?Math.round(sharedTotal/n):0;
 
-  // 날짜별 소계 텍스트
   const dns=['일','월','화','수','목','금','토'];
   const dayLines=Object.entries(p.days||{})
     .filter(([d])=>d>=from&&d<=to&&(p.days[d].expenses||[]).length)
@@ -2135,8 +2140,8 @@ function shareSettle(){
     });
 
   const lines=[
-    `✈️ ${p.flag||''} ${p.name} 정산`,
-    `📅 ${from} ~ ${to}`,
+    `✈️ ${p.flag||''} ${p.name} 리포트`,
+    `📅 출국 ${p.startDate||from} ~ 귀국 ${p.endDate||to}`,
     ``,
     `💰 총 지출: ${fmtW(grand)}`,
     `👤 개인: ${fmtW(personalTotal)}`,
@@ -2152,30 +2157,34 @@ function shareSettle(){
   ].filter(l=>l!==undefined);
   const txt=lines.join('\n');
 
-  // PDF 파일 첨부 공유 시도
-  _shareWithPDF(p,from,to,txt);
-}
+  // 공유 버튼 로딩 상태
+  const btn=document.querySelector('[onclick*="shareSettle"]');
+  const origTxt=btn?btn.textContent:'';
+  if(btn){btn.textContent='⏳ PDF 준비 중…';btn.disabled=true;}
+  const restore=()=>{if(btn){btn.textContent=origTxt;btn.disabled=false;}};
 
-function _shareWithPDF(p,from,to,txt){
-  // PDF 생성 후 파일로 공유
-  const tryShareWithFile=(pdfBlob)=>{
+  // PDF 먼저 생성 후 공유
+  const doShare=(pdfBlob)=>{
+    restore();
     const fname=`BuenCamino_${p.name}_${from}_${to}.pdf`.replace(/[\s/]/g,'_');
     const file=new File([pdfBlob],fname,{type:'application/pdf'});
     if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
-      navigator.share({title:`${p.name} 정산`,text:txt,files:[file]})
-        .catch(()=>_shareTextOnly(txt));
+      // PDF 파일 + 텍스트 함께 공유 (카카오톡 등)
+      navigator.share({title:`${p.name} 리포트`,text:txt,files:[file]})
+        .catch(()=>{
+          // 파일 공유 실패 시 텍스트만
+          _shareTextOnly(txt);
+        });
     } else {
-      // 파일 공유 미지원 → 텍스트만 공유 + PDF 다운로드
+      // 파일 공유 미지원 환경: 텍스트 공유 + PDF 자동 다운로드
       _shareTextOnly(txt);
-      // PDF도 자동 다운로드
       const url=URL.createObjectURL(pdfBlob);
       const a=document.createElement('a');a.href=url;a.download=fname;a.click();
       setTimeout(()=>URL.revokeObjectURL(url),3000);
     }
   };
 
-  // jsPDF로 PDF blob 생성
-  const makePDFBlob=()=>{
+  const makeAndShare=()=>{
     try{
       const {jsPDF}=window.jspdf;
       const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
@@ -2186,27 +2195,40 @@ function _shareWithPDF(p,from,to,txt){
         doc.setFont('NanumGothic');
       }
       _writePDFContent(doc,p,from,to);
-      return doc.output('blob');
-    }catch(e){return null;}
+      const blob=doc.output('blob');
+      doShare(blob);
+    }catch(e){
+      restore();
+      // PDF 실패 시 텍스트만
+      _shareTextOnly(txt);
+    }
   };
 
-  if(window.jspdf){
-    const blob=makePDFBlob();
-    if(blob) tryShareWithFile(blob);
-    else _shareTextOnly(txt);
+  // 한글 폰트 로드 후 PDF 생성
+  if(window._krFontBuf){
+    if(window.jspdf){makeAndShare();}
+    else{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      s.onload=makeAndShare;
+      s.onerror=()=>{restore();_shareTextOnly(txt);};
+      document.head.appendChild(s);
+    }
   } else {
-    // jsPDF 없으면 텍스트만
-    const s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-    s.onload=()=>{
-      const blob=makePDFBlob();
-      if(blob) tryShareWithFile(blob);
-      else _shareTextOnly(txt);
-    };
-    s.onerror=()=>_shareTextOnly(txt);
-    document.head.appendChild(s);
+    // 폰트+jsPDF 동시 로드
+    const loadFont=fetch('https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/nanumgothic/NanumGothic-Regular.ttf')
+      .then(r=>r.arrayBuffer()).then(buf=>{window._krFontBuf=buf;}).catch(()=>{});
+    const loadJsPDF=window.jspdf?Promise.resolve():new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      s.onload=res;s.onerror=rej;document.head.appendChild(s);
+    });
+    Promise.all([loadFont,loadJsPDF])
+      .then(makeAndShare)
+      .catch(()=>{restore();_shareTextOnly(txt);});
   }
 }
+
 
 function _shareTextOnly(txt){
   if(navigator.share) navigator.share({title:'',text:txt}).catch(()=>{
