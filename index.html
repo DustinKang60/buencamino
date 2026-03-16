@@ -1241,20 +1241,23 @@ function openAddExp(expId){
         <button class="chip${(!isLocal||ex?.expCurrency==='KRW')?' on':''}" data-v="KRW" onclick="pickChip(this,'ae-cur');toggleExpCurrency();">KRW 원화</button>
       </div>
     </div>
-    <div class="frow">
+    <div class="frow" style="align-items:flex-end;">
       <div class="fgroup">
-        <label class="flabel" style="display:flex;align-items:center;justify-content:space-between;">
-          <span id="ae-amt-label">금액</span>
-          <button type="button" onclick="openCalcFromExp()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:11px;padding:0;">🧮 계산기</button>
-        </label>
+        <label class="flabel"><span id="ae-amt-label">금액</span></label>
         <input class="finput" id="ae-amt" type="text" inputmode="decimal" placeholder="0"
           value="${ex?(ex.expCurrency==='KRW'?fmtComma(ex.amtKRW):fmtComma(ex.amtLocal))||'':''}"
           style="font-size:16px;" oninput="fmtInputComma(this);updateKRWPrev()"/>
       </div>
-      <div class="fgroup" id="ae-rate-wrap" style="${(!isLocal||ex?.expCurrency==='KRW')?'display:none;':''}>
+      <div class="fgroup" id="ae-rate-wrap" style="${(!isLocal||ex?.expCurrency==='KRW')?'display:none;':''}">
         <label class="flabel">환율 (1${p.currency}=₩) <span id="ae-spin" style="display:none;"><span class="spin"></span></span></label>
         <input class="finput" id="ae-rate" type="text" inputmode="decimal" placeholder="자동조회"
           value="${ex?fmtComma(ex.rate)||'':''}" style="font-size:16px;" oninput="fmtInputComma(this);updateKRWPrev()"/>
+      </div>
+      <div style="flex-shrink:0;padding-bottom:2px;">
+        <button type="button" onclick="openCalcFromExp()"
+          style="background:var(--surface2);border:1px solid var(--border2);color:var(--accent);
+                 cursor:pointer;font-size:13px;padding:10px 12px;border-radius:var(--radius-sm);
+                 white-space:nowrap;font-family:var(--ff);line-height:1;">🧮</button>
       </div>
     </div>
     <div id="ae-prev" style="display:none;" class="krw-prev"></div>
