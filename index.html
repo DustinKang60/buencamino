@@ -1236,12 +1236,20 @@ function openAddExp(expId){
     <div id="ae-sel-label" style="background:var(--accent-bg);border:1px solid var(--accent-border);border-radius:8px;padding:7px 11px;margin-bottom:12px;font-size:12px;color:var(--accent2);display:none;"></div>
     <div class="fgroup">
       <label class="flabel">결제 통화</label>
-      <div class="chips" id="ae-cur">
-        ${isLocal?`<button class="chip${(!ex||ex.expCurrency===p.currency)?' on':''}" data-v="${p.currency}" onclick="pickChip(this,'ae-cur');toggleExpCurrency();">${p.currency} (현지)</button>`:''}
-        <button class="chip${(!isLocal||ex?.expCurrency==='KRW')?' on':''}" data-v="KRW" onclick="pickChip(this,'ae-cur');toggleExpCurrency();">KRW 원화</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="chips" id="ae-cur" style="flex:1;">
+          ${isLocal?`<button class="chip${(!ex||ex.expCurrency===p.currency)?' on':''}" data-v="${p.currency}" onclick="pickChip(this,'ae-cur');toggleExpCurrency();">${p.currency} (현지)</button>`:''}
+          <button class="chip${(!isLocal||ex?.expCurrency==='KRW')?' on':''}" data-v="KRW" onclick="pickChip(this,'ae-cur');toggleExpCurrency();">KRW 원화</button>
+        </div>
+        <button type="button" onclick="openCalcFromExp()"
+          style="flex-shrink:0;background:var(--surface2);border:1px solid var(--border2);
+                 color:var(--accent);cursor:pointer;font-size:20px;
+                 width:44px;height:44px;border-radius:var(--radius-sm);
+                 display:flex;align-items:center;justify-content:center;
+                 font-family:var(--ff);">🧮</button>
       </div>
     </div>
-    <div class="frow" style="align-items:flex-end;">
+    <div class="frow">
       <div class="fgroup">
         <label class="flabel"><span id="ae-amt-label">금액</span></label>
         <input class="finput" id="ae-amt" type="text" inputmode="decimal" placeholder="0"
@@ -1252,12 +1260,6 @@ function openAddExp(expId){
         <label class="flabel">환율 (1${p.currency}=₩) <span id="ae-spin" style="display:none;"><span class="spin"></span></span></label>
         <input class="finput" id="ae-rate" type="text" inputmode="decimal" placeholder="자동조회"
           value="${ex?fmtComma(ex.rate)||'':''}" style="font-size:16px;" oninput="fmtInputComma(this);updateKRWPrev()"/>
-      </div>
-      <div style="flex-shrink:0;padding-bottom:2px;">
-        <button type="button" onclick="openCalcFromExp()"
-          style="background:var(--surface2);border:1px solid var(--border2);color:var(--accent);
-                 cursor:pointer;font-size:13px;padding:10px 12px;border-radius:var(--radius-sm);
-                 white-space:nowrap;font-family:var(--ff);line-height:1;">🧮</button>
       </div>
     </div>
     <div id="ae-prev" style="display:none;" class="krw-prev"></div>
