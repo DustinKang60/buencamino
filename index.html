@@ -1475,10 +1475,27 @@ function saveExp(expId){
     shared:isAllShared,sharers,
     payType,memo,date:targetDate};
   if(expId){
-    Object.values(p.days).forEach(day=>{
+    // 날짜가 바뀐 경우: 기존 날짜에서 원본 레코드를 찾아 제거하고 새 날짜에 추가
+    let originalRec=null;
+    let originalDate=null;
+    Object.entries(p.days).forEach(([date,day])=>{
       const idx=(day.expenses||[]).findIndex(e=>e.id===expId);
-      if(idx>=0)day.expenses[idx]={...day.expenses[idx],...rec};
+      if(idx>=0){
+        originalRec={...day.expenses[idx]};
+        originalDate=date;
+        day.expenses.splice(idx,1);
+      }
     });
+    // 새 날짜에 병합 저장
+    if(!p.days[targetDate])p.days[targetDate]={expenses:[],diary:'',photo:null};
+    p.days[targetDate].expenses.push({...(originalRec||{}),id:expId,...rec,date:targetDate});
+    // 기존 날짜가 비어있으면 정리
+    if(originalDate&&originalDate!==targetDate){
+      const od=p.days[originalDate];
+      if(od&&!(od.expenses||[]).length&&!(od.diary||'').trim()&&!od.photo){
+        delete p.days[originalDate];
+      }
+    }
   } else {
     p.days[targetDate].expenses.push({id:uid(),...rec,createdAt:Date.now()});
   }
