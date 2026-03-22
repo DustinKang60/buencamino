@@ -589,11 +589,11 @@ function renderExpenseTab(){
         const names=getCatNames(e.catIds||[e.catId]);
         const firstCat=db.cats.find(c=>c.id===(e.catIds||[e.catId])[0])||{icon:'💡'};
         return`<div class="li" onclick="selDate='${date}';openExpDetail('${date}','${e.id}')">
-          <div class="li-bar" style="background:${e.shared?'var(--amber)':'var(--accent)'};"></div>
+          <div class="li-bar" style="background:${e.shared?'var(--amber)':(e.sharers&&e.sharers.length>1?'var(--purple)':'var(--accent)')};"></div>
           <div class="li-ico exp">${firstCat.icon}</div>
           <div class="li-body">
             <div class="li-title">${names}</div>
-            <div style="margin-top:3px;"><span class="badge ${e.shared?'badge-a':'badge-b'}">${e.shared?'👥 공통':'👤 개인'}</span>${e.memo?`<span style="font-size:10px;color:var(--text3);margin-left:5px;">${esc(e.memo)}</span>`:''}</div>
+            <div style="margin-top:3px;">${fmtSharerBadge(e)}${e.memo?`<span style="font-size:10px;color:var(--text3);margin-left:5px;">${esc(e.memo)}</span>`:''}</div>
           </div>
           <div class="li-r">
             ${e.amtLocal&&e.currency&&e.currency!=='KRW'?
@@ -662,7 +662,7 @@ function renderProjStatsTab(){
     document.getElementById('month-list').innerHTML=`<div class="empty" style="padding-top:32px;"><div class="empty-ico">📊</div><div class="empty-t">지출 기록이 없어요</div></div>`;
     return;
   }
-  const shared=allExps.filter(e=>e.shared).reduce((s,e)=>s+(e.amtKRW||0),0);
+  const shared=allExps.filter(e=>isSharedExp(e)).reduce((s,e)=>s+(e.amtKRW||0),0);
   const personal=total-shared;
   const members=['나',...(p.members||[])];
   const n=members.length;
@@ -992,7 +992,7 @@ function renderProjSummary(){
   const p=curProj;
   const total=projTotal(p);
   const personal=Object.values(p.days||{}).reduce((s,d)=>
-    (d.expenses||[]).filter(e=>!e.shared).reduce((a,e)=>a+(e.amtKRW||0),s),0);
+    (d.expenses||[]).filter(e=>!isSharedExp(e)).reduce((a,e)=>a+(e.amtKRW||0),s),0);
   const shared=total-personal;
   const days=Object.keys(p.days||{}).length;
   const typeMap={solo:'나홀로',group:'동반자',package:'패키지'};
@@ -1104,7 +1104,7 @@ function renderDayPanel(){
       <div class="li-ico exp">${firstCat.icon}</div>
       <div class="li-body">
         <div class="li-title">${names}</div>
-        <div style="margin-top:3px;"><span class="badge ${e.shared?'badge-a':'badge-b'}">${e.shared?'👥 공통':'👤 개인'}</span></div>
+        <div style="margin-top:3px;">${fmtSharerBadge(e)}</div>
       </div>
       <div class="li-r">
         ${e.amtLocal&&e.currency&&e.currency!=='KRW'?
@@ -1150,7 +1150,7 @@ function renderMonthList(){
           <div class="li-ico exp">${firstCat.icon}</div>
           <div class="li-body">
             <div class="li-title">${names}</div>
-            <div style="margin-top:2px;"><span class="badge ${e.shared?'badge-a':'badge-b'}">${e.shared?'공통':'개인'}</span></div>
+            <div style="margin-top:2px;">${fmtSharerBadge(e)}</div>
           </div>
           <div class="li-r">
             ${e.amtLocal&&e.currency&&e.currency!=='KRW'?
@@ -1200,6 +1200,33 @@ function filterMonthList(){
 
 function getCatNames(ids){
   return (ids||[]).map(id=>{const c=db.cats.find(c=>c.id===id);return c?c.icon+' '+c.name:'';}).filter(Boolean).join(' + ');
+}
+
+// 부담자 배지 HTML 생성
+function fmtSharerBadge(e){
+  if(e.sharers&&e.sharers.length){
+    const n=e.sharers.length;
+    const isOnly=(n===1&&e.sharers[0]==='나');
+    if(isOnly) return`<span class="badge badge-b">👤 나만</span>`;
+    const label=n<=3?e.sharers.join('+'):`${n}명 공통`;
+    return`<span class="badge badge-a">👥 ${label}</span>`;
+  }
+  // 기존 데이터 호환
+  return e.shared
+    ?`<span class="badge badge-a">👥 공통</span>`
+    :`<span class="badge badge-b">👤 개인</span>`;
+}
+
+// 공통 지출 여부 판단 (sharers 우선, 기존 shared 호환)
+function isSharedExp(e){
+  if(e.sharers&&e.sharers.length) return !(e.sharers.length===1&&e.sharers[0]==='나');
+  return !!e.shared;
+}
+
+// 부담 인원수 반환
+function sharerCount(e){
+  if(e.sharers&&e.sharers.length) return e.sharers.length;
+  return e.shared?null:1; // shared=true면 전체(null), false면 1명
 }
 
 // ══════════════════════════════════
@@ -1271,11 +1298,18 @@ function openAddExp(expId){
       </div>
     </div>
     <div class="fgroup">
-      <label class="flabel">구분</label>
-      <div class="chips" id="ae-shared">
-        <button class="chip${ex&&!ex.shared?' on':!ex&&(!p.members||!p.members.length)?' on':''}" data-v="personal" onclick="pickChip(this,'ae-shared')">👤 개인</button>
-        <button class="chip${ex?.shared||(!ex&&p.members&&p.members.length>0)?' on':''}" data-v="shared" onclick="pickChip(this,'ae-shared')">👥 공통 ${p.members&&p.members.length?`(${p.members.length+1}명)`:''}</button>
+      <label class="flabel">부담자 <span style="font-size:10px;color:var(--text3);font-weight:400;">(선택된 인원으로 균등 분할)</span></label>
+      <div class="chips" id="ae-sharers">
+        ${['나',...(p.members||[])].map(m=>{
+          // 기존 데이터 호환: shared=true→전체선택, shared=false→나만
+          const defOn = ex
+            ? (ex.sharers ? ex.sharers.includes(m) : (ex.shared ? true : m==='나'))
+            : true; // 신규: 전원 기본 선택
+          return `<button class="chip${defOn?' on':''}" data-v="${m}"
+            onclick="this.classList.toggle('on');updateKRWPrev();">${m==='나'?'👤 나':'👥 '+m}</button>`;
+        }).join('')}
       </div>
+      <div id="ae-sharer-preview" style="margin-top:6px;font-size:11px;color:var(--text3);"></div>
     </div>
     <div class="fgroup">
       <label class="flabel">메모</label>
@@ -1342,19 +1376,48 @@ function updateKRWPrev(){
   const p=curProj; if(!p) return;
   const cur=getChip('ae-cur')||p.currency;
   const isLocalCur=cur!=='KRW';
-  if(!isLocalCur){
-    // 원화 선택 시 preview 숨김
-    const prev=document.getElementById('ae-prev');
-    if(prev) prev.style.display='none';
-    return;
-  }
   const amt=parseFloat((document.getElementById('ae-amt')?.value||'').replace(/,/g,''))||0;
   const rate=parseFloat((document.getElementById('ae-rate')?.value||'').replace(/,/g,''))||0;
+
+  // 부담자 선택 미리보기
+  const sharerBtns=[...document.querySelectorAll('#ae-sharers .chip.on')];
+  const sharers=sharerBtns.map(b=>b.dataset.v);
+  const n=sharers.length||1;
+  const prevEl=document.getElementById('ae-sharer-preview');
+  if(prevEl){
+    if(sharers.length===0){
+      prevEl.textContent='⚠ 부담자를 한 명 이상 선택하세요';
+      prevEl.style.color='var(--red)';
+    } else if(sharers.length===1&&sharers[0]==='나'){
+      prevEl.textContent='개인 지출';
+      prevEl.style.color='var(--text3)';
+    } else {
+      const allMembers=['나',...(p.members||[])];
+      const isAll=allMembers.every(m=>sharers.includes(m))&&sharers.length===allMembers.length;
+      prevEl.textContent=isAll?`전체 ${n}명 공통`:`${sharers.join(' + ')} (${n}명 분담)`;
+      prevEl.style.color='var(--accent2)';
+    }
+  }
+
+  // 원화 환산 미리보기
   const prev=document.getElementById('ae-prev');
   if(!prev)return;
+  if(!isLocalCur){
+    // 원화인 경우 1인당만 표시
+    if(amt&&n>1){
+      prev.style.display='';
+      prev.textContent=`1인당 ${fmtW(Math.round(amt/n))}  (${fmtW(amt)} ÷ ${n}명)`;
+    } else prev.style.display='none';
+    return;
+  }
   if(amt&&rate){
+    const krw=Math.round(amt*rate);
     prev.style.display='';
-    prev.textContent=`${fmtW(Math.round(amt*rate))}  (${fmtN(amt)} ${cur} × ${fmtN(rate)})`;
+    if(n>1){
+      prev.textContent=`${fmtW(krw)}  (${fmtN(amt)} ${cur} × ${fmtN(rate)})  →  1인당 ${fmtW(Math.round(krw/n))}`;
+    } else {
+      prev.textContent=`${fmtW(krw)}  (${fmtN(amt)} ${cur} × ${fmtN(rate)})`;
+    }
   } else prev.style.display='none';
 }
 
@@ -1392,7 +1455,13 @@ function saveExp(expId){
   const amtLocal=isLocalCur?amtInput:0;
   const amtKRW=isLocalCur?Math.round(amtInput*rate):amtInput;
   const isLocal=isLocalCur;
-  const shared=getChip('ae-shared')==='shared';
+  const sharerBtns=[...document.querySelectorAll('#ae-sharers .chip.on')];
+  const sharers=sharerBtns.map(b=>b.dataset.v);
+  if(!sharers.length){alert('부담자를 한 명 이상 선택하세요.');return;}
+  const allMembers=['나',...(p.members||[])];
+  const shared=sharers.length>1||!sharers.includes('나')||(sharers.length===allMembers.length);
+  // 하위 호환: 전체 선택이면 shared=true, 나만이면 shared=false
+  const isAllShared=allMembers.every(m=>sharers.includes(m))&&sharers.length===allMembers.length;
   const payType=getChip('ae-pay')||'card';
   const memo=document.getElementById('ae-memo')?.value.trim()||'';
   const dateInput=document.getElementById('ae-date');
@@ -1402,7 +1471,9 @@ function saveExp(expId){
   if(!p.days[targetDate])p.days[targetDate]={expenses:[],diary:'',photo:null};
   const rec={catId:catIds[0],catIds,amtLocal,amtKRW,
     currency:p.currency,expCurrency,
-    rate:isLocalCur?rate:null,shared,payType,memo,date:targetDate};
+    rate:isLocalCur?rate:null,
+    shared:isAllShared,sharers,
+    payType,memo,date:targetDate};
   if(expId){
     Object.values(p.days).forEach(day=>{
       const idx=(day.expenses||[]).findIndex(e=>e.id===expId);
@@ -1443,7 +1514,11 @@ function openExpDetail(date,expId){
     <div class="card">
       <div class="row"><span class="rl">항목</span><span class="rr" style="text-align:right;max-width:60%;">${names}</span></div>
       <div class="row"><span class="rl">결제</span><span class="rr">${ex.payType==='cash'?'💵 현금':'💳 카드'}</span></div>
-      <div class="row"><span class="rl">구분</span><span class="rr"><span class="badge ${ex.shared?'badge-a':'badge-b'}">${ex.shared?'👥 공통':'👤 개인'}</span></span></div>
+      <div class="row"><span class="rl">부담자</span><span class="rr" style="text-align:right;">${
+        ex.sharers&&ex.sharers.length
+          ? ex.sharers.join(' · ') + (ex.sharers.length>1?`<span style="font-size:11px;color:var(--text3);margin-left:4px;">(1인당 ${fmtW(Math.round((ex.amtKRW||0)/ex.sharers.length))})</span>`:'')
+          : (ex.shared?'전체 공통':'나만')
+      }</span></div>
       ${ex.memo?`<div class="row"><span class="rl">메모</span><span class="rr">${esc(ex.memo)}</span></div>`:''}
     </div>`;
   const acts=`
@@ -1665,7 +1740,7 @@ function calcSettle(){
   dayEntries.forEach(([date,day])=>(day.expenses||[]).forEach(e=>all.push({...e,date})));
 
   const grand=all.reduce((s,e)=>s+(e.amtKRW||0),0);
-  const sharedTotal=all.filter(e=>e.shared).reduce((s,e)=>s+(e.amtKRW||0),0);
+  const sharedTotal=all.filter(e=>isSharedExp(e)).reduce((s,e)=>s+(e.amtKRW||0),0);
   const personalTotal=grand-sharedTotal;
   const perPerson=n>1?Math.round(sharedTotal/n):0;
 
@@ -1683,9 +1758,13 @@ function calcSettle(){
       const localStr=e.amtLocal&&e.currency&&e.currency!=='KRW'
         ?`<span style="color:var(--text3);font-size:11px;">${fmtLocal2(e.amtLocal,e.currency)}</span> `:'';
       const payIcon=e.payType==='cash'?'💵':'💳';
-      const shBadge=e.shared
-        ?`<span style="background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:1px 6px;font-size:10px;font-weight:700;">공통</span>`
-        :`<span style="background:var(--accent-bg);color:var(--accent2);border-radius:8px;padding:1px 6px;font-size:10px;font-weight:700;">개인</span>`;
+      const isShared=isSharedExp(e);
+      const sharerLabel=e.sharers&&e.sharers.length
+        ?(e.sharers.length===1&&e.sharers[0]==='나'?'나만':e.sharers.join('+'))
+        :(isShared?'공통':'개인');
+      const shBadge=isShared
+        ?`<span style="background:var(--amber-bg);color:var(--amber);border-radius:8px;padding:1px 6px;font-size:10px;font-weight:700;">${sharerLabel}</span>`
+        :`<span style="background:var(--accent-bg);color:var(--accent2);border-radius:8px;padding:1px 6px;font-size:10px;font-weight:700;">${sharerLabel}</span>`;
       const memo=e.memo?`<span style="color:var(--text3);font-size:11px;"> · ${esc(e.memo)}</span>`:'';
       return`<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--border);">
         <div style="flex:1;min-width:0;">
@@ -1925,7 +2004,7 @@ function _writePDFContent(doc,p,from,to,latinOnly){
     if(date>=from&&date<=to)(day.expenses||[]).forEach(e=>all.push({...e,date}));
   });
   const grand=all.reduce((s,e)=>s+(e.amtKRW||0),0);
-  const sharedTotal=all.filter(e=>e.shared).reduce((s,e)=>s+(e.amtKRW||0),0);
+  const sharedTotal=all.filter(e=>isSharedExp(e)).reduce((s,e)=>s+(e.amtKRW||0),0);
   const personalTotal=grand-sharedTotal;
   const perPerson=n>1?Math.round(sharedTotal/n):0;
 
@@ -2062,7 +2141,11 @@ function _writePDFContent(doc,p,from,to,latinOnly){
       }).filter(Boolean).join('+');
       const memo=e.memo?' · '+e.memo:'';
       const payLbl=latinOnly?(e.payType==='cash'?'Cash':'Card'):(e.payType==='cash'?'현금':'카드');
-      const shLbl=latinOnly?(e.shared?'Shared':'Personal'):(e.shared?'공통':'개인');
+      const expIsShared=isSharedExp(e);
+      const sharerLbl=e.sharers&&e.sharers.length
+        ?(e.sharers.length===1&&e.sharers[0]==='나'?'나만':e.sharers.join('+'))
+        :(expIsShared?'공통':'개인');
+      const shLbl=latinOnly?(expIsShared?'Shared':'Personal'):sharerLbl;
       const localStr=e.amtLocal&&e.currency&&e.currency!=='KRW'
         ?`${e.currency} ${Math.round(e.amtLocal).toLocaleString()}  `:'';
       const label=`  ${cats}${memo}`;
@@ -2129,7 +2212,7 @@ function shareSettle(){
     if(date>=from&&date<=to)(day.expenses||[]).forEach(e=>all.push({...e,date}));
   });
   const grand=all.reduce((s,e)=>s+(e.amtKRW||0),0);
-  const sharedTotal=all.filter(e=>e.shared).reduce((s,e)=>s+(e.amtKRW||0),0);
+  const sharedTotal=all.filter(e=>isSharedExp(e)).reduce((s,e)=>s+(e.amtKRW||0),0);
   const personalTotal=grand-sharedTotal;
   const perPerson=n>1?Math.round(sharedTotal/n):0;
 
@@ -2261,7 +2344,7 @@ function renderStats(){
   const cards=projs.map(p=>{
     const total=projTotal(p);
     const allExps=Object.values(p.days||{}).flatMap(d=>d.expenses||[]);
-    const shared=allExps.filter(e=>e.shared).reduce((s,e)=>s+(e.amtKRW||0),0);
+    const shared=allExps.filter(e=>isSharedExp(e)).reduce((s,e)=>s+(e.amtKRW||0),0);
     const personal=total-shared;
 
     // 여행 일수 (출국일~귀국일 또는 기록된 날짜 범위)
@@ -2533,7 +2616,23 @@ function fmtW(n){return'₩'+Math.round(n).toLocaleString();}
 function fmtN(n){if(!n&&n!==0)return'';return(Math.round(n*100)/100).toLocaleString();}
 function fmtComma(n){if(!n&&n!==0)return'';return Number(n).toLocaleString();}
 function fmtLocal2(amt,cur){if(!amt)return'';const sym={JPY:'¥',USD:'$',PHP:'₱',THB:'฿',VND:'₫',EUR:'€',GBP:'£',HKD:'HK$',SGD:'S$',TWD:'NT$',MYR:'RM',IDR:'Rp',CNY:'¥',AUD:'A$',CAD:'C$',CHF:'Fr'};return(sym[cur]||cur)+Math.round(amt).toLocaleString();}
-function fmtInputComma(inp){const raw=inp.value.replace(/,/g,'');const n=parseFloat(raw);if(!isNaN(n)&&raw!==''){const pos=inp.selectionStart;const oldLen=inp.value.length;inp.value=n.toLocaleString();const newLen=inp.value.length;inp.setSelectionRange(pos+(newLen-oldLen),pos+(newLen-oldLen));}
+function fmtInputComma(inp){
+  const raw=inp.value.replace(/,/g,'');
+  // 소숫점 입력 중이면 포맷 건드리지 않음 (예: "18." "18.5" 입력 중)
+  if(raw.endsWith('.')|| /\.\d$/.test(raw)){return;}
+  // 소숫점 2자리까지만 허용
+  const m=raw.match(/^(-?\d*\.?\d{0,2})/);
+  const clean=m?m[1]:raw;
+  const n=parseFloat(clean);
+  if(!isNaN(n)&&clean!==''){
+    const pos=inp.selectionStart;
+    const oldLen=inp.value.length;
+    // 소숫점 있으면 소숫점 이하 자리 유지
+    const decimals=(clean.split('.')[1]||'').length;
+    inp.value=decimals>0?n.toLocaleString('ko-KR',{minimumFractionDigits:decimals,maximumFractionDigits:2}):n.toLocaleString();
+    const newLen=inp.value.length;
+    inp.setSelectionRange(pos+(newLen-oldLen),pos+(newLen-oldLen));
+  }
 }
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
